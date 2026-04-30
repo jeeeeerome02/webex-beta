@@ -20,9 +20,7 @@
         @endif
     </head>
     <body>
-        <div id="app">
-            <Navbar></Navbar>
-        </div>
+        <div id="app"></div>
 </body>
 </html>
 
