@@ -4,8 +4,85 @@
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
+@source '../**/*.vue';
 
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+:root {
+    color-scheme: light;
+    --page-bg: #ffffff;
+    --page-text: #161616;
+    --section-border: transparent;
+    --muted-text: #3f3f3f;
+    --surface-bg: rgba(255, 255, 255, 0.84);
+    --surface-border: rgba(22, 22, 22, 0.12);
+    --navbar-bg: #ffffff;
+    --content-bg: var(--navbar-bg);
+    --navbar-border: transparent;
+    --navbar-text: #111111;
+    --navbar-hover: rgba(0, 0, 0, 0.08);
+    --button-primary-bg: #111111;
+    --button-primary-text: #ffffff;
+    --button-secondary-bg: transparent;
+    --button-secondary-text: #111111;
+    --button-border: #111111;
+    --hero-base: #ffffff;
+    --hero-wave-1: #ffffff;
+    --hero-wave-2: #f1f1f1;
+    --hero-wave-3: #d9d9d9;
+    --hero-wave-4: #bfbfbf;
+    --hero-wave-5: #ffffff;
+    --wave-deep: #3f3f3f;
+    --wave-strong: #767676;
+    --wave-mid: #d6d6d6;
+    --wave-soft: #eeeeee;
+    --wave-front: #ffffff;
+    --wave-glow: rgba(255, 255, 255, 0.78);
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --page-bg: #000000;
+    --page-text: #ffffff;
+    --section-border: rgba(255, 255, 255, 0.12);
+    --muted-text: #cfcfcf;
+    --surface-bg: rgba(7, 7, 7, 0.74);
+    --surface-border: rgba(255, 255, 255, 0.12);
+    --navbar-bg: #000000;
+    --content-bg: var(--navbar-bg);
+    --navbar-border: rgba(255, 255, 255, 0.12);
+    --navbar-text: #ffffff;
+    --navbar-hover: rgba(255, 255, 255, 0.12);
+    --button-primary-bg: #ffffff;
+    --button-primary-text: #000000;
+    --button-secondary-bg: transparent;
+    --button-secondary-text: #ffffff;
+    --button-border: #ffffff;
+    --hero-base: #050505;
+    --hero-wave-1: #2f2f2f;
+    --hero-wave-2: #1e1e1e;
+    --hero-wave-3: #121212;
+    --hero-wave-4: #000000;
+    --hero-wave-5: #3a3a3a;
+    --wave-deep: #000000;
+    --wave-strong: #1c1c1c;
+    --wave-mid: #303030;
+    --wave-soft: #3d3d3d;
+    --wave-front: #000000;
+    --wave-glow: rgba(255, 255, 255, 0.06);
+}
+
+html,
+body,
+#app {
+    min-height: 100%;
+}
+
+body {
+    margin: 0;
+    color: var(--page-text);
+    background: var(--page-bg);
 }
