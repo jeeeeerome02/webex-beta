@@ -10,6 +10,11 @@ defineProps({
   textSize: {
     type: Number,
     default: 26
+  },
+
+  textColor: {
+    type: String,
+    default: null
   }
 });
 </script>
@@ -47,7 +52,8 @@ defineProps({
           class="logo-text"
           :style="{
             fontSize: textSize + 'px',
-            marginLeft: 0
+            marginLeft: 0,
+            color: textColor || 'var(--navbar-text)'
           }"
         >
           webex
@@ -75,7 +81,6 @@ defineProps({
 }
 
 .logo-text {
-    color: var(--navbar-text);
     font-weight: 600;
     line-height: 1;
 }
