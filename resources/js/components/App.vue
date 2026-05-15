@@ -97,8 +97,13 @@ export default {
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
-    /* Optional: smooth scrollbar */
-    scroll-behavior: smooth;
+    /* Hide scrollbar but keep functionality */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+}
+.right-scroll-wrapper::-webkit-scrollbar {
+    width: 0;
+    height: 0;
 }
 
 @media (max-width: 768px) {

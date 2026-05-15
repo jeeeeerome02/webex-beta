@@ -22,7 +22,7 @@ const description = computed(() =>
                 <div class="logo-wrapper">
                     <AppLogo :size="70" :textSize="32" textColor="#ffffff" />
                 </div>
-                
+
                 <!-- Animated text content -->
                 <div class="text-content">
                     <transition name="fade" mode="out-in">
@@ -71,6 +71,7 @@ const description = computed(() =>
     padding: 4rem;
     max-width: 480px;
     color: #fff;
+    overflow: hidden;
 }
 
 .logo-wrapper {
