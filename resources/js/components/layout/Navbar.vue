@@ -7,7 +7,29 @@ import AppLogo from './AppLogo.vue';
 const items = ref([
     { label: 'Home' },
     { label: 'Features' },
-    { label: 'About Us' },
+    {
+        label: 'About',
+        items: [
+            {
+                label: 'Platform Overview',
+                icon: 'pi pi-angle-right',
+                command: () => {},
+                description: 'A technical overview of Webex as a platform for real-time communication and collaboration.'
+            },
+            {
+                label: 'Developer',
+                icon: 'pi pi-angle-right',
+                command: () => {},
+                description: 'Webex is developed by Cisco Systems, a leader in networking and enterprise collaboration.'
+            },
+            {
+                label: 'How it works',
+                icon: 'pi pi-angle-right',
+                command: () => {},
+                description: 'Webex uses cloud-based infrastructure, secure protocols, and real-time media streaming for meetings and messaging.'
+            }
+        ]
+    },
     { label: 'Contact' },
 ]);
 
@@ -51,7 +73,11 @@ onUnmounted(() => {
             </template>
             <template #end>
                 <div class="navbar-actions">
-                    <Button
+
+                    <Button label="Login" icon="pi pi-user" size="small" class="navbar-login" />
+                    <Button label="Register" icon="pi pi-user-plus" size="small" class="navbar-register" />
+                </div>
+                <Button
                         :icon="currentTheme === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"
                         :aria-label="currentTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
                         text
@@ -60,9 +86,6 @@ onUnmounted(() => {
                         class="theme-toggle"
                         @click="toggleTheme"
                     />
-                    <Button label="Login" icon="pi pi-user" size="small" class="navbar-login" />
-                    <Button label="Register" icon="pi pi-user-plus" size="small" class="navbar-register" />
-                </div>
             </template>
         </Menubar>
     </header>
@@ -190,6 +213,7 @@ onUnmounted(() => {
     color: var(--button-secondary-text);
     background: var(--button-secondary-bg);
     border-color: var(--button-border);
+    margin-right: 20px;
 }
 
 .navbar :deep(.navbar-register .pi) {
@@ -261,5 +285,11 @@ onUnmounted(() => {
         margin-left: auto;
     }
 
+}
+/* Force PrimeVue Menubar submenu to show on hover */
+.navbar :deep(.p-menubar-root-list > .p-menuitem:hover > .p-submenu-list) {
+    display: block !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
 }
 </style>

@@ -26,13 +26,18 @@ import Button from 'primevue/button';
                     </p>
                      <Button
                         label="Try It Now"
-                        icon="pi pi-user"
+                        icon="pi pi-play"
                         size="small"
                         severity="contrast"
                         class="btn-get-started"
                     />
-                    <Button label="Features" icon="pi pi-user" size="small" severity="secondary" class="btn-features" />
-
+                    <Button
+                        label="Features"
+                        icon="pi pi-sliders-h"
+                        size="small"
+                        severity="secondary"
+                        class="btn-features"
+                    />
                 </div>
                 <p class="footer-hero">
                         Zero hassle, just smarter exams. Try it now and see the difference!
@@ -48,7 +53,6 @@ import Button from 'primevue/button';
                     </p>
                 </div>
             </div>
-
         </div>
     </section>
 </template>
@@ -244,6 +248,38 @@ import Button from 'primevue/button';
     .btn-get-started,
     .btn-features {
         width: 100%;
+    }
+}
+@media (max-width: 600px) {
+    .hero {
+        padding: 80px 6px 16px;
+    }
+    .card-container {
+        gap: 12px;
+    }
+    .hero-content-left h1 {
+        font-size: 2.2rem;
+    }
+    .hero-content-left h2 {
+        font-size: 1.3rem;
+    }
+    .hero-content-right .logo {
+        font-size: 1.1rem;
+    }
+    .hero-content-right p,
+    .hero-content-left p {
+        font-size: 1rem;
+    }
+    .footer-hero {
+        font-size: 0.95rem;
+    }
+    .card {
+        padding: 16px;
+    }
+    .btn-get-started,
+    .btn-features {
+        font-size: 0.95rem;
+        padding: 0.6rem 0.8rem;
     }
 }
 </style>
