@@ -8,6 +8,9 @@ import 'primeicons/primeicons.css';
 // Root component
 import App from './components/App.vue';
 
+// Router
+import router from './router.js';
+
 const app = createApp(App);
 
 app.use(PrimeVue, {
@@ -18,5 +21,7 @@ app.use(PrimeVue, {
         },
     },
 });
+
+app.use(router);
 
 app.mount('#app');

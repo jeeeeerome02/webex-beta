@@ -74,8 +74,8 @@ onUnmounted(() => {
             <template #end>
                 <div class="navbar-actions">
 
-                    <Button label="Login" icon="pi pi-user" size="small" class="navbar-login" />
-                    <Button label="Register" icon="pi pi-user-plus" size="small" class="navbar-register" />
+                    <Button label="Login" icon="pi pi-user" size="small" class="navbar-login" as="a" href="/login" />
+                    <Button label="Register" icon="pi pi-user-plus" size="small" class="navbar-register" as="a" href="/register" />
                 </div>
                 <Button
                         :icon="currentTheme === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"
