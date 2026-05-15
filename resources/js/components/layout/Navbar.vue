@@ -69,7 +69,7 @@ onUnmounted(() => {
     <header class="navbar" :class="{ 'navbar-scrolled': isScrolled }">
         <Menubar :model="items">
             <template #start>
-                <AppLogo />
+                <AppLogo :size="40"/>
             </template>
             <template #end>
                 <div class="navbar-actions">

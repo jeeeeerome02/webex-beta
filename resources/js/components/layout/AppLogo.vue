@@ -1,13 +1,57 @@
 <script setup>
 import logo from '../../assets/images/logo.png';
+
+defineProps({
+  size: {
+    type: Number,
+    default: 100
+  },
+
+  textSize: {
+    type: Number,
+    default: 26
+  }
+});
 </script>
 
 <template>
     <span class="app-logo-wrap" aria-label="Webex">
-        <span class="logo-mark" aria-hidden="true">
-            <img :src="logo" alt="" class="app-logo" />
+        <span
+          class="logo-mark"
+          aria-hidden="true"
+          :style="{
+            width: size + 'px',
+            height: size + 'px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }"
+        >
+            <img
+              :src="logo"
+              alt=""
+              class="app-logo"
+              :style="{
+                maxWidth: size + 'px',
+                maxHeight: size + 'px',
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                display: 'block',
+                margin: 0,
+              }"
+            />
         </span>
-        <span class="logo-text">webex</span>
+
+        <span
+          class="logo-text"
+          :style="{
+            fontSize: textSize + 'px',
+            marginLeft: 0
+          }"
+        >
+          webex
+        </span>
     </span>
 </template>
 
@@ -19,41 +63,20 @@ import logo from '../../assets/images/logo.png';
 }
 
 .logo-mark {
-    display: inline-flex;
-    width: 28px;
-    height: 28px;
-    overflow: hidden;
+  display: inline-flex;
+  overflow: visible !important;
 }
 
 .app-logo {
-    height: 28px;
-    width: auto;
-    max-width: none;
-    transform: translateX(-12px) scale(1.45);
-    transform-origin: left center;
+  width: auto;
+  max-width: 100%;
+  transform: none;
+  display: block;
 }
 
 .logo-text {
     color: var(--navbar-text);
-    font-size: 1.25rem;
     font-weight: 600;
     line-height: 1;
-    letter-spacing: 0;
-}
-
-@media (max-width: 960px) {
-    .logo-mark {
-        width: 24px;
-        height: 24px;
-    }
-
-    .app-logo {
-        height: 24px;
-        transform: translateX(-10px) scale(1.45);
-    }
-
-    .logo-text {
-        font-size: 1.1rem;
-    }
 }
 </style>
