@@ -1,29 +1,21 @@
+<script setup>
+import { aboutTitle, aboutDescription, aboutStats } from '../../data/siteData';
+</script>
+
 <template>
     <section class="content-section about-section">
         <div class="about-container">
             <span class="about-label">About Us</span>
-            <h2 class="about-title">Empowering Educators with<br>Smart Exam Technology</h2>
-            <p class="about-description">
-                Our platform leverages cutting-edge artificial intelligence to transform the way exams are created,
-                delivered, and graded. We believe that educators deserve better tools — tools that save time,
-                reduce errors, and unlock deeper insights into student learning.
-            </p>
+            <h2 class="about-title">{{ aboutTitle }}</h2>
+            <p class="about-description">{{ aboutDescription }}</p>
             <div class="about-grid">
-                <div class="about-stat">
-                    <span class="about-stat-number">50K+</span>
-                    <span class="about-stat-label">Exams Created</span>
-                </div>
-                <div class="about-stat">
-                    <span class="about-stat-number">12K+</span>
-                    <span class="about-stat-label">Active Educators</span>
-                </div>
-                <div class="about-stat">
-                    <span class="about-stat-number">98%</span>
-                    <span class="about-stat-label">Grading Accuracy</span>
-                </div>
-                <div class="about-stat">
-                    <span class="about-stat-number">200+</span>
-                    <span class="about-stat-label">Institutions</span>
+                <div
+                    v-for="stat in aboutStats"
+                    :key="stat.label"
+                    class="about-stat"
+                >
+                    <span class="about-stat-number">{{ stat.value }}</span>
+                    <span class="about-stat-label">{{ stat.label }}</span>
                 </div>
             </div>
         </div>

@@ -14,19 +14,19 @@ const items = ref([
                 label: 'Platform Overview',
                 icon: 'pi pi-angle-right',
                 command: () => {},
-                description: 'A technical overview of Webex as a platform for real-time communication and collaboration.'
-            },
-            {
-                label: 'Developer',
-                icon: 'pi pi-angle-right',
-                command: () => {},
-                description: 'Webex is developed by Cisco Systems, a leader in networking and enterprise collaboration.'
+                description: 'An AI-powered exam platform for creating, delivering, and grading assessments automatically.'
             },
             {
                 label: 'How it works',
                 icon: 'pi pi-angle-right',
                 command: () => {},
-                description: 'Webex uses cloud-based infrastructure, secure protocols, and real-time media streaming for meetings and messaging.'
+                description: 'Create questions with AI, deliver exams to students, and review results — all in one seamless workflow.'
+            },
+            {
+                label: 'Security',
+                icon: 'pi pi-angle-right',
+                command: () => {},
+                description: 'End-to-end encryption and role-based access keep your exam data safe and compliant.'
             }
         ]
     },

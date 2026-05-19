@@ -117,36 +117,5 @@
 </style>
 
 <script setup>
-const features = [
-    {
-        icon: '<i class="pi pi-bolt"></i>',
-        title: 'AI-Powered Questions',
-        description: 'Automatically generate high-quality exam questions tailored to your curriculum with a single click.',
-    },
-    {
-        icon: '<i class="pi pi-star"></i>',
-        title: 'Smart Grading',
-        description: 'Let AI evaluate answers instantly and consistently, freeing up your time for what matters most.',
-    },
-    {
-        icon: '<i class="pi pi-cog"></i>',
-        title: 'Custom Templates',
-        description: 'Create and save exam templates that match your institution\'s format and difficulty standards.',
-    },
-    {
-        icon: '<i class="pi pi-globe"></i>',
-        title: 'Cloud-Based',
-        description: 'Access your exams and results anywhere, anytime — securely stored in the cloud.',
-    },
-    {
-        icon: '<i class="pi pi-users"></i>',
-        title: 'Student Analytics',
-        description: 'Detailed per-student insights and at-a-glance class performance dashboards.',
-    },
-    {
-        icon: '<i class="pi pi-lock"></i>',
-        title: 'Secure & Private',
-        description: 'End-to-end encryption and role-based access keep your data safe and compliant.',
-    },
-];
+import { features } from '../../data/siteData';
 </script>

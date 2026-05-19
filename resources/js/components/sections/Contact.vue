@@ -155,12 +155,13 @@ function handleSubmit() {
     letter-spacing: 0.02em;
 }
 
-/* Match LoginPage input design */
+/* Shared width */
 .form-input,
 .form-textarea {
     width: 100%;
 }
 
+/* PrimeVue InputText — exact LoginPage spec */
 :deep(.p-inputtext) {
     width: 100%;
     padding: 0.75rem 0.875rem;
@@ -169,8 +170,8 @@ function handleSubmit() {
     background: var(--surface-bg);
     color: var(--page-text);
     font-size: 0.875rem;
-    transition: all 0.2s ease;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    transition: all 0.2s ease;
 }
 
 :deep(.p-inputtext:focus) {
@@ -180,7 +181,7 @@ function handleSubmit() {
     background: #fff;
 }
 
-/* Native textarea styling to match inputs */
+/* Native textarea — mirrors .p-inputtext exactly */
 .form-textarea {
     resize: vertical;
     padding: 0.75rem 0.875rem;
@@ -189,9 +190,10 @@ function handleSubmit() {
     background: var(--surface-bg);
     color: var(--page-text);
     font-size: 0.875rem;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    font-family: inherit;
     line-height: 1.5;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-textarea:focus {
@@ -201,10 +203,27 @@ function handleSubmit() {
     background: #fff;
 }
 
+/* Submit button — matches LoginPage submit-btn */
 .contact-submit {
-    align-self: flex-start;
-    margin-top: 0.5rem;
+    width: 100%;
+    padding: 0.875rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
     border-radius: 12px;
+    border: 1.5px solid #111;
+    background: #111;
+    color: #fff;
+    transition: all 0.2s ease;
+}
+
+.contact-submit:hover:not(:disabled) {
+    background: #222;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.contact-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* ── Info Cards ── */
@@ -239,7 +258,7 @@ function handleSubmit() {
 }
 
 .info-heading {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     font-weight: 700;
     color: #111;
     margin: 0 0 0.25rem;

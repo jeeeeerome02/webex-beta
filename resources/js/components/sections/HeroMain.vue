@@ -1,6 +1,11 @@
 <script setup>
-// Hero section
 import Button from 'primevue/button';
+import {
+    heroTagline,
+    heroDescription,
+    heroCard2Title,
+    heroCard2Description,
+} from '../../data/siteData';
 </script>
 
 <template>
@@ -21,9 +26,7 @@ import Button from 'primevue/button';
                 <div class="hero-content-left">
                     <h1>Smarter Online</h1>
                     <h2>Examination Starts Here</h2>
-                    <p>
-                        Let AI help you create questions and review results automatically. Run exams smoothly without the usual hassle.
-                    </p>
+                    <p>{{ heroDescription }}</p>
                      <Button
                         label="Try It Now"
                         icon="pi pi-play"
@@ -40,19 +43,15 @@ import Button from 'primevue/button';
                     />
                 </div>
                 <p class="footer-hero">
-                        Zero hassle, just smarter exams. Try it now and see the difference!
+                    {{ heroTagline }}
                 </p>
             </div>
 
             <!-- Card 2 -->
             <div class="card">
                 <div class="hero-content-right">
-                    <h1 class="logo">AI-Powered Exams</h1>
-                    <p>
-                        Harness the power of artificial intelligence to generate high-quality exam questions, automate grading,
-                        and deliver real-time insights. Whether you're a teacher, professor, or institution, our platform is
-                        built to make assessment faster, fairer, and more insightful than ever before.
-                    </p>
+                    <h1 class="logo">{{ heroCard2Title }}</h1>
+                    <p>{{ heroCard2Description }}</p>
                 </div>
             </div>
         </div>

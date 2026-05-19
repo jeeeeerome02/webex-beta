@@ -1,42 +1,66 @@
+<script setup>
+import AppLogo from '../layout/AppLogo.vue';
+import {
+    siteName,
+    footerTagline as tagline,
+    productLinks,
+    companyLinks,
+    supportLinks,
+} from '../../data/siteData';
+</script>
+
 <template>
     <footer class="content-section footer-section">
         <div class="footer-container">
             <div class="footer-top">
                 <div class="footer-brand">
-                    <div class="footer-logo">Web<span class="footer-logo-accent">ex</span></div>
-                    <p class="footer-tagline">Empowering educators with smart exam technology.</p>
+                    <AppLogo :size="30" :textSize="16" />
+                    <p class="footer-tagline">{{ tagline }}</p>
                 </div>
                 <div class="footer-links-grid">
                     <div class="footer-col">
                         <h4 class="footer-col-title">Product</h4>
-                        <a href="#" class="footer-link">Features</a>
-                        <a href="#" class="footer-link">Pricing</a>
-                        <a href="#" class="footer-link">Integrations</a>
-                        <a href="#" class="footer-link">Changelog</a>
+                        <a
+                            v-for="link in productLinks"
+                            :key="link.label"
+                            :href="link.href"
+                            class="footer-link"
+                        >
+                            {{ link.label }}
+                        </a>
                     </div>
                     <div class="footer-col">
                         <h4 class="footer-col-title">Company</h4>
-                        <a href="#" class="footer-link">About</a>
-                        <a href="#" class="footer-link">Blog</a>
-                        <a href="#" class="footer-link">Careers</a>
-                        <a href="#" class="footer-link">Press</a>
+                        <a
+                            v-for="link in companyLinks"
+                            :key="link.label"
+                            :href="link.href"
+                            class="footer-link"
+                        >
+                            {{ link.label }}
+                        </a>
                     </div>
                     <div class="footer-col">
                         <h4 class="footer-col-title">Support</h4>
-                        <a href="#" class="footer-link">Help Center</a>
-                        <a href="#" class="footer-link">Documentation</a>
-                        <a href="#" class="footer-link">Community</a>
-                        <a href="#" class="footer-link">Status</a>
+                        <a
+                            v-for="link in supportLinks"
+                            :key="link.label"
+                            :href="link.href"
+                            class="footer-link"
+                        >
+                            {{ link.label }}
+                        </a>
                     </div>
                 </div>
             </div>
             <div class="footer-divider"></div>
             <div class="footer-bottom">
-                <p class="footer-copy">&copy; {{ new Date().getFullYear() }} Webex. All rights reserved.</p>
+                <p class="footer-copy">
+                    &copy; {{ new Date().getFullYear() }} {{ siteName }}. All rights reserved.
+                </p>
                 <div class="footer-legal">
                     <a href="#" class="footer-legal-link">Privacy Policy</a>
                     <a href="#" class="footer-legal-link">Terms of Service</a>
-                    <a href="#" class="footer-legal-link">Cookie Policy</a>
                 </div>
             </div>
         </div>
@@ -62,18 +86,7 @@
 }
 
 .footer-brand {
-    max-width: 280px;
-}
-
-.footer-logo {
-    font-size: 1.625rem;
-    font-weight: 800;
-    color: var(--page-text);
-    letter-spacing: -0.5px;
-}
-
-.footer-logo-accent {
-    color: var(--button-primary-bg);
+    max-width: 260px;
 }
 
 .footer-tagline {

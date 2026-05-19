@@ -4,33 +4,9 @@ import Carousel from 'primevue/carousel';
 import Card from 'primevue/card';
 import Avatar from 'primevue/avatar';
 import Divider from 'primevue/divider';
+import { testimonials } from '../../data/siteData';
 
-const testimonials = ref([
-  {
-    id: 1,
-    name: 'Sarah Johnson',
-    role: 'Product Manager',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    text: 'This platform has transformed how we conduct exams. The AI-powered question generation saves us hours of work each week.',
-    rating: 5
-  },
-  {
-    id: 2,
-    name: 'Michael Chen',
-    role: 'University Professor',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    text: 'The automated grading feature is incredibly accurate and has reduced our workload significantly.',
-    rating: 5
-  },
-  {
-    id: 3,
-    name: 'Emily Rodriguez',
-    role: 'High School Teacher',
-    avatar: 'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    text: 'As a teacher, I love how easy it is to create customized assessments and track student progress.',
-    rating: 4
-  }
-]);
+const activeIndex = ref(0);
 </script>
 
 <template>
