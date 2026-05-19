@@ -2,6 +2,7 @@
 import Navbar from '../components/layout/Navbar.vue';
 import HeroMain from '../components/sections/HeroMain.vue';
 import Features from '../components/sections/Features.vue';
+import Testimonials from '../components/sections/Testimonials.vue';
 import About from '../components/sections/About.vue';
 import Contact from '../components/sections/Contact.vue';
 import Footer from '../components/sections/Footer.vue';
@@ -12,6 +13,7 @@ import Footer from '../components/sections/Footer.vue';
     <main class="site-content">
         <HeroMain />
         <Features />
+        <Testimonials />
         <About />
         <Contact />
         <Footer />

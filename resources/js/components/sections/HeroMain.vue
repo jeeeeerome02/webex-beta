@@ -47,9 +47,11 @@ import Button from 'primevue/button';
             <!-- Card 2 -->
             <div class="card">
                 <div class="hero-content-right">
-                    <h1 class="logo">Lorem Ipsum</h1>
+                    <h1 class="logo">AI-Powered Exams</h1>
                     <p>
-                        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+                        Harness the power of artificial intelligence to generate high-quality exam questions, automate grading,
+                        and deliver real-time insights. Whether you're a teacher, professor, or institution, our platform is
+                        built to make assessment faster, fairer, and more insightful than ever before.
                     </p>
                 </div>
             </div>
