@@ -18,6 +18,21 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
+
+            // Role
+            $table->string('role', 16)->default('student'); // teacher | student
+
+            // Course
+            $table->string('course')->nullable();
+
+            // Philippine address
+            $table->string('address_line')->nullable();
+            $table->string('barangay')->nullable();
+            $table->string('city_municipality')->nullable();
+            $table->string('province')->nullable();
+            $table->string('region', 32)->nullable();   // e.g. region-ncr
+            $table->string('postal_code', 4)->nullable();
+
             $table->timestamps();
         });
 
