@@ -1,5 +1,6 @@
 <script setup>
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
+import axios from 'axios';
 import { Form } from '@primevue/forms';
 import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
@@ -28,82 +29,104 @@ const initialValues = reactive({
     agreeToTerms: false
 });
 
+const isSubmitting = ref(false);
+const serverError = ref('');
+const serverErrors = ref({});
+
 const resolver = ({ values }) => {
+    const formValues = { ...initialValues, ...values };
     const errors = {};
 
-    if (!values.name || !values.name.trim()) {
+    if (!formValues.name || !formValues.name.trim()) {
         errors.name = [{ message: 'Full name is required.' }];
     }
 
-    if (!values.email || !values.email.trim()) {
+    if (!formValues.email || !formValues.email.trim()) {
         errors.email = [{ message: 'Email is required.' }];
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formValues.email)) {
         errors.email = [{ message: 'Please enter a valid email address.' }];
     }
 
-    if (!values.password) {
+    if (!formValues.password) {
         errors.password = [{ message: 'Password is required.' }];
-    } else if (values.password.length < 8) {
+    } else if (formValues.password.length < 8) {
         errors.password = [{ message: 'Password must be at least 8 characters.' }];
     }
 
-    if (!values.confirmPassword) {
+    if (!formValues.confirmPassword) {
         errors.confirmPassword = [{ message: 'Please confirm your password.' }];
-    } else if (values.password !== values.confirmPassword) {
+    } else if (formValues.password !== formValues.confirmPassword) {
         errors.confirmPassword = [{ message: 'Passwords do not match.' }];
     }
 
-    if (values.role !== 'teacher' && values.role !== 'student') {
+    if (formValues.role !== 'teacher' && formValues.role !== 'student') {
         errors.role = [{ message: 'Please select your role.' }];
     }
 
-    if (!values.course || !values.course.trim()) {
+    if (!formValues.course || !formValues.course.trim()) {
         errors.course = [{ message: 'Course is required.' }];
     }
-    if (!values.addressLine || !values.addressLine.trim()) {
+    if (!formValues.addressLine || !formValues.addressLine.trim()) {
         errors.addressLine = [{ message: 'Street address is required.' }];
     }
 
-    if (!values.barangay || !values.barangay.trim()) {
+    if (!formValues.barangay || !formValues.barangay.trim()) {
         errors.barangay = [{ message: 'Barangay is required.' }];
     }
 
-    if (!values.cityMunicipality || !values.cityMunicipality.trim()) {
+    if (!formValues.cityMunicipality || !formValues.cityMunicipality.trim()) {
         errors.cityMunicipality = [{ message: 'City / Municipality is required.' }];
     }
 
-    if (!values.province || !values.province.trim()) {
+    if (!formValues.province || !formValues.province.trim()) {
         errors.province = [{ message: 'Province is required.' }];
     }
 
-    if (!values.region) {
+    if (!formValues.region) {
         errors.region = [{ message: 'Region is required.' }];
     }
 
-    if (!values.postalCode || !values.postalCode.trim()) {
+    if (!formValues.postalCode || !formValues.postalCode.trim()) {
         errors.postalCode = [{ message: 'Postal code is required.' }];
-    } else if (!/^\d{4}$/.test(values.postalCode)) {
+    } else if (!/^\d{4}$/.test(formValues.postalCode)) {
         errors.postalCode = [{ message: 'Enter a valid 4-digit postal code.' }];
     }
 
-    if (!values.agreeToTerms) {
+    if (!formValues.agreeToTerms) {
         errors.agreeToTerms = [{ message: 'You must agree to the terms and conditions.' }];
     }
 
     return { errors };
 };
 
-const onFormSubmit = (e) => {
-    if (e.valid) {
-        console.log('Registration data:', initialValues);
-        // Handle registration logic here
+const fieldError = (field) => serverErrors.value[field]?.[0] || '';
+
+const onFormSubmit = async (e) => {
+    serverError.value = '';
+    serverErrors.value = {};
+
+    if (!e.valid || isSubmitting.value) {
+        return;
+    }
+
+    isSubmitting.value = true;
+
+    try {
+        const { data } = await axios.post('/register', { ...initialValues });
+        window.dispatchEvent(new CustomEvent('auth:changed', { detail: data.user }));
+        await router.push('/');
+    } catch (error) {
+        if (error.response?.status === 422) {
+            serverErrors.value = error.response.data.errors || {};
+            serverError.value = error.response.data.message || 'Please check the registration form.';
+            return;
+        }
+
+        serverError.value = 'Unable to create your account right now. Please try again.';
+    } finally {
+        isSubmitting.value = false;
     }
 };
-
-const roleOptions = [
-    { label: 'Teacher', value: 'teacher' },
-    { label: 'Student', value: 'student' },
-];
 
 const philippineCourses = [
     { label: 'Select Course', value: '' },
@@ -135,7 +158,7 @@ const philippineCourses = [
     { label: 'Master of Business Administration', value: 'mba' },
     { label: 'Master of Education', value: 'med' },
     { label: 'Doctor of Medicine', value: 'md' },
-    { label: 'LLB – Bachelor of Laws', value: 'llb' },
+    { label: 'LLB - Bachelor of Laws', value: 'llb' },
     { label: 'Other', value: 'other' },
 ];
 
@@ -153,6 +176,15 @@ const philippineCourses = [
             <h2 class="form-title">Create your account</h2>
             <p class="form-subtitle">Get started with your free account today.</p>
         </div>
+
+        <Message
+            v-if="serverError"
+            severity="error"
+            size="small"
+            class="form-alert"
+        >
+            {{ serverError }}
+        </Message>
 
         <Form
             v-slot="$form"
@@ -177,7 +209,7 @@ const philippineCourses = [
                             class="hidden-radio"
                         />
                         <div class="role-content">
-                            <i class="pi pi-chalkboard-teacher"></i>
+                            <i class="pi pi-book"></i>
                             <span>Teacher</span>
                         </div>
                     </label>
@@ -193,18 +225,18 @@ const philippineCourses = [
                             class="hidden-radio"
                         />
                         <div class="role-content">
-                            <i class="pi pi-user-graduate"></i>
+                            <i class="pi pi-graduation-cap"></i>
                             <span>Student</span>
                         </div>
                     </label>
                 </div>
                 <Message
-                    v-if="$form.role?.invalid"
+                    v-if="$form.role?.invalid || fieldError('role')"
                     severity="error"
                     size="small"
                     variant="simple"
                 >
-                    {{ $form.role.error?.message }}
+                    {{ $form.role?.error?.message || fieldError('role') }}
                 </Message>
             </div>
 
@@ -214,18 +246,20 @@ const philippineCourses = [
                     <label for="name" class="form-label">Full Name</label>
                     <InputText
                         id="name"
+                        v-model="initialValues.name"
                         name="name"
                         type="text"
+                        autocomplete="name"
                         placeholder="Enter your full name"
                         class="form-input"
                     />
                     <Message
-                        v-if="$form.name?.invalid"
+                        v-if="$form.name?.invalid || fieldError('name')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.name.error?.message }}
+                        {{ $form.name?.error?.message || fieldError('name') }}
                     </Message>
                 </div>
 
@@ -233,18 +267,20 @@ const philippineCourses = [
                     <label for="email" class="form-label">Email Address</label>
                     <InputText
                         id="email"
+                        v-model="initialValues.email"
                         name="email"
                         type="email"
+                        autocomplete="email"
                         placeholder="Enter your email"
                         class="form-input"
                     />
                     <Message
-                        v-if="$form.email?.invalid"
+                        v-if="$form.email?.invalid || fieldError('email')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.email.error?.message }}
+                        {{ $form.email?.error?.message || fieldError('email') }}
                     </Message>
                 </div>
             </div>
@@ -255,8 +291,10 @@ const philippineCourses = [
                     <label for="password" class="form-label">Password</label>
                     <Password
                         id="password"
+                        v-model="initialValues.password"
                         name="password"
                         type="password"
+                        autocomplete="new-password"
                         placeholder="Create a password"
                         :feedback="true"
                         :weakLabel="'Weak'"
@@ -266,12 +304,12 @@ const philippineCourses = [
                         inputClass="w-full"
                     />
                     <Message
-                        v-if="$form.password?.invalid"
+                        v-if="$form.password?.invalid || fieldError('password')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.password.error?.message }}
+                        {{ $form.password?.error?.message || fieldError('password') }}
                     </Message>
                 </div>
 
@@ -279,20 +317,22 @@ const philippineCourses = [
                     <label for="confirmPassword" class="form-label">Confirm Password</label>
                     <Password
                         id="confirmPassword"
+                        v-model="initialValues.confirmPassword"
                         name="confirmPassword"
                         type="password"
+                        autocomplete="new-password"
                         placeholder="Confirm your password"
                         :feedback="false"
                         class="form-input"
                         inputClass="w-full"
                     />
                     <Message
-                        v-if="$form.confirmPassword?.invalid"
+                        v-if="$form.confirmPassword?.invalid || fieldError('confirmPassword')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.confirmPassword.error?.message }}
+                        {{ $form.confirmPassword?.error?.message || fieldError('confirmPassword') }}
                     </Message>
                 </div>
             </div>
@@ -305,6 +345,8 @@ const philippineCourses = [
                 <div class="form-field">
                     <label for="course" class="form-label">Course</label>
                     <Select
+                        inputId="course"
+                        name="course"
                         v-model="initialValues.course"
                         :options="philippineCourses"
                         optionLabel="label"
@@ -316,12 +358,12 @@ const philippineCourses = [
                         filter
                     />
                     <Message
-                        v-if="$form.course?.invalid"
+                        v-if="$form.course?.invalid || fieldError('course')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.course.error?.message }}
+                        {{ $form.course?.error?.message || fieldError('course') }}
                     </Message>
                 </div>
 
@@ -329,18 +371,20 @@ const philippineCourses = [
                     <label for="region" class="form-label">Region</label>
                     <InputText
                         id="region"
+                        v-model="initialValues.region"
                         name="region"
                         type="text"
+                        autocomplete="address-level1"
                         placeholder="e.g. NCR / Central Luzon"
                         class="form-input"
                     />
                     <Message
-                        v-if="$form.region?.invalid"
+                        v-if="$form.region?.invalid || fieldError('region')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.region.error?.message }}
+                        {{ $form.region?.error?.message || fieldError('region') }}
                     </Message>
                 </div>
             </div>
@@ -353,18 +397,20 @@ const philippineCourses = [
                 <label for="addressLine" class="form-label">Street / Building Address</label>
                 <InputText
                     id="addressLine"
+                    v-model="initialValues.addressLine"
                     name="addressLine"
                     type="text"
+                    autocomplete="street-address"
                     placeholder="e.g. 123 Rizal Street"
                     class="form-input"
                 />
                 <Message
-                    v-if="$form.addressLine?.invalid"
+                    v-if="$form.addressLine?.invalid || fieldError('addressLine')"
                     severity="error"
                     size="small"
                     variant="simple"
                 >
-                    {{ $form.addressLine.error?.message }}
+                    {{ $form.addressLine?.error?.message || fieldError('addressLine') }}
                 </Message>
             </div>
 
@@ -373,18 +419,19 @@ const philippineCourses = [
                     <label for="barangay" class="form-label">Barangay</label>
                     <InputText
                         id="barangay"
+                        v-model="initialValues.barangay"
                         name="barangay"
                         type="text"
                         placeholder="e.g. Barangay San Jose"
                         class="form-input"
                     />
                     <Message
-                        v-if="$form.barangay?.invalid"
+                        v-if="$form.barangay?.invalid || fieldError('barangay')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.barangay.error?.message }}
+                        {{ $form.barangay?.error?.message || fieldError('barangay') }}
                     </Message>
                 </div>
 
@@ -392,18 +439,20 @@ const philippineCourses = [
                     <label for="cityMunicipality" class="form-label">City / Municipality</label>
                     <InputText
                         id="cityMunicipality"
+                        v-model="initialValues.cityMunicipality"
                         name="cityMunicipality"
                         type="text"
+                        autocomplete="address-level2"
                         placeholder="e.g. Quezon City"
                         class="form-input"
                     />
                     <Message
-                        v-if="$form.cityMunicipality?.invalid"
+                        v-if="$form.cityMunicipality?.invalid || fieldError('cityMunicipality')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.cityMunicipality.error?.message }}
+                        {{ $form.cityMunicipality?.error?.message || fieldError('cityMunicipality') }}
                     </Message>
                 </div>
             </div>
@@ -413,18 +462,20 @@ const philippineCourses = [
                     <label for="province" class="form-label">Province</label>
                     <InputText
                         id="province"
+                        v-model="initialValues.province"
                         name="province"
                         type="text"
+                        autocomplete="address-level1"
                         placeholder="e.g. Metro Manila"
                         class="form-input"
                     />
                     <Message
-                        v-if="$form.province?.invalid"
+                        v-if="$form.province?.invalid || fieldError('province')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.province.error?.message }}
+                        {{ $form.province?.error?.message || fieldError('province') }}
                     </Message>
                 </div>
 
@@ -432,29 +483,40 @@ const philippineCourses = [
                     <label for="postalCode" class="form-label">Postal Code</label>
                     <InputText
                         id="postalCode"
+                        v-model="initialValues.postalCode"
                         name="postalCode"
                         type="text"
+                        inputmode="numeric"
+                        autocomplete="postal-code"
                         placeholder="e.g. 1103"
                         class="form-input"
                     />
                     <Message
-                        v-if="$form.postalCode?.invalid"
+                        v-if="$form.postalCode?.invalid || fieldError('postalCode')"
                         severity="error"
                         size="small"
                         variant="simple"
                     >
-                        {{ $form.postalCode.error?.message }}
+                        {{ $form.postalCode?.error?.message || fieldError('postalCode') }}
                     </Message>
                 </div>
             </div>
 
             <div class="form-options">
                 <div class="checkbox-field">
-                    <Checkbox name="agreeToTerms" binary inputId="agreeToTerms" />
+                    <Checkbox v-model="initialValues.agreeToTerms" name="agreeToTerms" binary inputId="agreeToTerms" />
                     <label for="agreeToTerms" class="checkbox-label">
                         I agree to the <a href="#" class="link">Terms of Service</a> and <a href="#" class="link">Privacy Policy</a>
                     </label>
                 </div>
+                <Message
+                    v-if="$form.agreeToTerms?.invalid || fieldError('agreeToTerms')"
+                    severity="error"
+                    size="small"
+                    variant="simple"
+                >
+                    {{ $form.agreeToTerms?.error?.message || fieldError('agreeToTerms') }}
+                </Message>
             </div>
 
             <Button
@@ -462,6 +524,8 @@ const philippineCourses = [
                 severity="secondary"
                 label="Create Account"
                 class="submit-btn"
+                :loading="isSubmitting"
+                :disabled="isSubmitting"
             />
         </Form>
 
@@ -484,17 +548,19 @@ const philippineCourses = [
 <style scoped>
 .register-form-wrapper {
     width: 100%;
-    max-width: 480px;
+    max-width: 560px;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1.25rem;
     margin: 0 auto;
+    padding-block: 0.25rem;
 }
 
 /* Back Button */
 .back-button {
     display: inline-flex;
     align-items: center;
+    align-self: flex-start;
     gap: 0.5rem;
     padding: 0.5rem 0;
     background: none;
@@ -537,15 +603,15 @@ const philippineCourses = [
 .register-form {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
     width: 100%;
 }
 
 /* Two-column row */
 .form-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
 }
 
 /* Section Divider */
@@ -581,15 +647,19 @@ const philippineCourses = [
 .role-selector {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
+    gap: 0.75rem;
     width: 100%;
 }
 
 .role-option {
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 68px;
     cursor: pointer;
     border: 2px solid var(--surface-border);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 0.5rem;
     transition: all 0.3s ease;
     background: var(--surface-bg);
@@ -642,6 +712,7 @@ const philippineCourses = [
     flex-direction: column;
     gap: 0.5rem;
     width: 100%;
+    min-width: 0;
 }
 
 .form-label {
@@ -654,95 +725,82 @@ const philippineCourses = [
 .form-input,
 .form-select {
     width: 100%;
+    min-width: 0;
 }
 
-/* Native select — matches .p-inputtext */
-.form-select {
-    padding: 0.75rem 0.875rem;
+/* PrimeVue Select - keep the root box aligned with InputText */
+:deep(.p-select) {
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+}
+
+:deep(.p-select.form-select) {
+    display: flex;
+    align-items: center;
     border: 1.5px solid var(--surface-border);
-    border-radius: 12px;
+    border-radius: 8px;
     background: var(--surface-bg);
     color: var(--page-text);
-    font-size: 0.875rem;
-    font-weight: 400;
-    transition: all 0.2s ease;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-    appearance: auto;
-    -webkit-appearance: auto;
-    cursor: pointer;
-    min-height: 44px;
-    line-height: 1.5;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
-.form-select:focus {
-    outline: none;
+:deep(.p-select.form-select .p-select-label) {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0.75rem 0.875rem !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--page-text) !important;
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+    line-height: 1.5 !important;
+}
+
+:deep(.p-select.form-select .p-select-dropdown) {
+    width: 2.75rem;
+    color: var(--muted-text);
+}
+
+:deep(.p-select.form-select:has(.p-select-label.p-placeholder) .p-select-label) {
+    color: var(--muted-text) !important;
+}
+
+:deep(.p-select.form-select.p-focus),
+:deep(.p-select.form-select:focus-within) {
     border-color: #111;
     box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
     background: #fff;
 }
 
-/* PrimeVue Select — override theme defaults to match InputText exactly */
-:deep(.p-select) {
-    width: 100%;
-    min-height: 44px;
+:deep(.p-select.form-select.p-invalid) {
+    border-color: #e53935;
 }
 
-:deep(.p-select .p-select-label) {
-    padding: 0.75rem 0.875rem !important;
-    font-size: 0.875rem !important;
-    font-weight: 400 !important;
-    line-height: 1.5 !important;
-    min-height: 44px !important;
-    border-radius: 12px;
-    background: var(--surface-bg) !important;
-    border: 1.5px solid var(--surface-border) !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
-    color: var(--page-text) !important;
-    transition: all 0.2s ease !important;
-}
-
-:deep(.p-select:has(.p-select-label.p-placeholder) .p-select-label) {
-    color: var(--muted-text) !important;
-}
-
-:deep(.p-select.p-filled .p-select-label),
-:deep(.p-select:not(.p-variant-filled) .p-select-label) {
-    color: var(--page-text) !important;
-}
-
-:deep(.p-select:focus-within .p-select-label),
-:deep(.p-select.p-focus .p-select-label) {
-    border-color: #111 !important;
-    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08) !important;
-    background: #fff !important;
-    outline: none !important;
-}
-
-:deep(.p-select-label:focus) {
-    border-color: #111 !important;
-}
-
-/* Remove inner input that breaks layout */
-:deep(.p-select .p-hidden-accessible),
-:deep(.p-select .p-hidden-accessible input) {
-    display: none !important;
-}
-
-:deep(.p-select.p-invalid .p-select-label) {
-    border-color: #e53935 !important;
+:deep(.p-select-overlay) {
+    max-width: min(560px, calc(100vw - 2rem));
 }
 
 :deep(.p-inputtext),
 :deep(.p-password input) {
     width: 100%;
+    min-height: 46px;
+    box-sizing: border-box;
     padding: 0.75rem 0.875rem;
     border: 1.5px solid var(--surface-border);
-    border-radius: 12px;
+    border-radius: 8px;
     background: var(--surface-bg);
     color: var(--page-text);
     font-size: 0.875rem;
     transition: all 0.2s ease;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+:deep(.p-password) {
+    display: block;
+    width: 100%;
 }
 
 :deep(.p-inputtext:focus),
@@ -758,13 +816,17 @@ const philippineCourses = [
 }
 
 :deep(.p-password-overlay) {
-    border-radius: 12px;
+    border-radius: 8px;
 }
 
 :deep(.p-message) {
     padding: 0.5rem 0.75rem;
     font-size: 0.8125rem;
     margin-top: 0.25rem;
+}
+
+.form-alert {
+    width: 100%;
 }
 
 /* Form Options */
@@ -779,6 +841,11 @@ const philippineCourses = [
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
+}
+
+:deep(.p-checkbox) {
+    flex: 0 0 auto;
+    margin-top: 0.125rem;
 }
 
 .checkbox-label {
@@ -805,7 +872,7 @@ const philippineCourses = [
     padding: 0.875rem 1.5rem;
     font-size: 0.875rem;
     font-weight: 600;
-    border-radius: 12px;
+    border-radius: 8px;
     margin-top: 0.5rem;
     background: #111;
     color: #fff;
@@ -866,7 +933,7 @@ const philippineCourses = [
 /* Responsive */
 @media (max-width: 768px) {
     .register-form-wrapper {
-        max-width: 400px;
+        max-width: 520px;
     }
 
     .form-title {
@@ -896,19 +963,4 @@ const philippineCourses = [
     }
 }
 
-/* Dark theme */
-:root[data-theme='dark'] .form-title,
-:root[data-theme='dark'] .form-label,
-:root[data-theme='dark'] .forgot-link,
-:root[data-theme='dark'] .submit-btn,
-:root[data-theme='dark'] .social-btn,
-:root[data-theme='dark'] .signin-link,
-:root[data-theme='dark'] .link {
-    color: #111;
-}
-
-:root[data-theme='dark'] .submit-btn:hover,
-:root[data-theme='dark'] .link:hover {
-    opacity: 0.7;
-}
 </style>

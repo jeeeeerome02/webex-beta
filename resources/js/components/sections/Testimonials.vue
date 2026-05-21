@@ -10,7 +10,7 @@ const activeIndex = ref(0);
 </script>
 
 <template>
-  <section class="testimonials-section">
+  <section id="testimonials" class="content-section testimonials-section">
     <div class="testimonials-container">
       <h2 class="section-title">What Our Users Say</h2>
 
@@ -62,7 +62,6 @@ const activeIndex = ref(0);
 
 <style scoped>
 .testimonials-section {
-  padding: 5rem 1rem;
   background: var(--content-bg);
 }
 
@@ -94,7 +93,7 @@ const activeIndex = ref(0);
 }
 
 .testimonial-slide-card {
-  border-radius: 20px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--surface-bg);
   box-shadow: 0 8px 40px rgba(0,0,0,0.07);
@@ -192,10 +191,6 @@ const activeIndex = ref(0);
 }
 
 @media (max-width: 768px) {
-  .testimonials-section {
-    padding: 3.5rem 1rem;
-  }
-
   .section-title {
     font-size: 1.875rem;
     margin-bottom: 2rem;
@@ -218,10 +213,6 @@ const activeIndex = ref(0);
 }
 
 @media (max-width: 480px) {
-  .testimonials-section {
-    padding: 2.75rem 0.75rem;
-  }
-
   .section-title {
     font-size: 1.5rem;
     margin-bottom: 1.5rem;

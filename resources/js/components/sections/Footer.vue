@@ -69,12 +69,12 @@ import {
 
 <style scoped>
 .footer-section {
-    padding: 60px 150px 40px;
+    padding: 60px clamp(1.25rem, 5vw, 5rem) 40px;
     border-top: 1px solid var(--surface-border);
 }
 
 .footer-container {
-    max-width: 1200px;
+    width: min(100%, 1180px);
     margin: 0 auto;
 }
 

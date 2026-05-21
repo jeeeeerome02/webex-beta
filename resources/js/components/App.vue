@@ -78,6 +78,15 @@ export default {
 
 /* Right panel - centered container, no direct scroll */
 .right-panel {
+    --page-text: #111111;
+    --muted-text: #555555;
+    --surface-bg: #ffffff;
+    --surface-border: rgba(17, 17, 17, 0.14);
+    --button-primary-bg: #111111;
+    --button-primary-text: #ffffff;
+    --button-secondary-bg: transparent;
+    --button-secondary-text: #111111;
+    --button-border: #111111;
     flex: 1;
     display: flex;
     align-items: center;
@@ -91,12 +100,14 @@ export default {
 /* Inner scrollable wrapper: contains the form, centers horizontally, scrolls vertically when needed */
 .right-scroll-wrapper {
     width: 100%;
-    max-width: 440px;
-    max-height: calc(100vh - 4rem);
+    max-width: min(560px, 100%);
+    max-height: calc(100vh - 3rem);
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
+    padding: 0.25rem;
+    overscroll-behavior: contain;
     /* Hide scrollbar but keep functionality */
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE/Edge */
@@ -107,9 +118,24 @@ export default {
 }
 
 @media (max-width: 768px) {
+    .auth-wrapper {
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+    }
+
+    .right-panel {
+        align-items: flex-start;
+        min-height: 100vh;
+        padding: 1.25rem;
+        overflow: visible;
+    }
+
     .right-scroll-wrapper {
         max-width: 100%;
-        max-height: calc(100vh - 2rem);
+        max-height: none;
+        overflow: visible;
+        padding: 0;
     }
 }
 </style>

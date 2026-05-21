@@ -1,18 +1,20 @@
 <template>
-    <section class="features-section">
-        <div class="features-header">
-            <h2 class="features-title">Features</h2>
-            <p class="features-subtitle">Discover what makes our product stand out</p>
-        </div>
-        <div class="features-grid">
-            <div
-                v-for="(feature, index) in features"
-                :key="index"
-                class="feature-card"
-            >
-                <span class="feature-icon" v-html="feature.icon"></span>
-                <h3 class="feature-title">{{ feature.title }}</h3>
-                <p class="feature-text">{{ feature.description }}</p>
+    <section id="features" class="content-section features-section">
+        <div class="features-container">
+            <div class="features-header">
+                <h2 class="features-title">Features</h2>
+                <p class="features-subtitle">Discover what makes our product stand out</p>
+            </div>
+            <div class="features-grid">
+                <div
+                    v-for="(feature, index) in features"
+                    :key="index"
+                    class="feature-card"
+                >
+                    <span class="feature-icon" v-html="feature.icon"></span>
+                    <h3 class="feature-title">{{ feature.title }}</h3>
+                    <p class="feature-text">{{ feature.description }}</p>
+                </div>
             </div>
         </div>
     </section>
@@ -21,7 +23,11 @@
 <style scoped>
 .features-section {
     width: 100%;
-    padding: 80px 0;
+}
+
+.features-container {
+    width: min(100%, 1180px);
+    margin: 0 auto;
 }
 
 .features-header {
@@ -47,7 +53,6 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 2rem;
-    padding: 0 150px;
 }
 
 .feature-card {
@@ -55,7 +60,7 @@
     flex-direction: column;
     gap: 0.75rem;
     padding: 1.75rem;
-    border-radius: 12px;
+    border-radius: 8px;
     background: #fff;
     border: 1.5px solid var(--surface-border);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
@@ -89,26 +94,16 @@
     margin: 0;
 }
 
-@media (max-width: 1200px) {
-    .features-grid {
-        padding: 0 2rem;
-    }
-}
-
 @media (max-width: 960px) {
-    .features-section {
-        padding: 48px 20px;
-    }
     .features-grid {
         grid-template-columns: 1fr 1fr;
-        padding: 0 1rem;
     }
 }
 
 @media (max-width: 600px) {
     .features-grid {
         grid-template-columns: 1fr;
-        padding: 0 0.5rem;
+        gap: 1rem;
     }
     .features-title {
         font-size: 1.75rem;

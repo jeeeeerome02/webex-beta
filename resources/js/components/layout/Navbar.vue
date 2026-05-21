@@ -1,40 +1,60 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
 import Menubar from 'primevue/menubar';
 import Button from 'primevue/button';
 import AppLogo from './AppLogo.vue';
 
+const router = useRouter();
+
+const scrollToSection = async (sectionId) => {
+    if (router.currentRoute.value.name !== 'Home') {
+        await router.push('/');
+        await nextTick();
+    }
+
+    window.requestAnimationFrame(() => {
+        document.getElementById(sectionId)?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+        });
+    });
+};
+
 const items = ref([
-    { label: 'Home' },
-    { label: 'Features' },
+    { label: 'Home', command: () => scrollToSection('home') },
+    { label: 'Features', command: () => scrollToSection('features') },
     {
         label: 'About',
         items: [
             {
                 label: 'Platform Overview',
                 icon: 'pi pi-angle-right',
-                command: () => {},
+                command: () => scrollToSection('about'),
                 description: 'An AI-powered exam platform for creating, delivering, and grading assessments automatically.'
             },
             {
                 label: 'How it works',
                 icon: 'pi pi-angle-right',
-                command: () => {},
-                description: 'Create questions with AI, deliver exams to students, and review results — all in one seamless workflow.'
+                command: () => scrollToSection('features'),
+                description: 'Create questions with AI, deliver exams to students, and review results in one seamless workflow.'
             },
             {
                 label: 'Security',
                 icon: 'pi pi-angle-right',
-                command: () => {},
+                command: () => scrollToSection('features'),
                 description: 'End-to-end encryption and role-based access keep your exam data safe and compliant.'
             }
         ]
     },
-    { label: 'Contact' },
+    { label: 'Contact', command: () => scrollToSection('contact') },
 ]);
 
 const currentTheme = ref('light');
 const isScrolled = ref(false);
+const currentUser = ref(null);
+const isLoggingOut = ref(false);
 
 const updateNavbarState = () => {
     isScrolled.value = window.scrollY > 12;
@@ -51,17 +71,49 @@ const toggleTheme = () => {
     applyTheme(currentTheme.value === 'dark' ? 'light' : 'dark');
 };
 
+const loadCurrentUser = async () => {
+    try {
+        const { data } = await axios.get('/auth/user');
+        currentUser.value = data.user;
+    } catch {
+        currentUser.value = null;
+    }
+};
+
+const handleAuthChange = (event) => {
+    currentUser.value = event.detail || null;
+};
+
+const logout = async () => {
+    isLoggingOut.value = true;
+
+    try {
+        await axios.post('/logout');
+        currentUser.value = null;
+        window.dispatchEvent(new CustomEvent('auth:changed', { detail: null }));
+
+        if (['Login', 'Register'].includes(router.currentRoute.value.name)) {
+            await router.push('/');
+        }
+    } finally {
+        isLoggingOut.value = false;
+    }
+};
+
 onMounted(() => {
     const savedTheme = localStorage.getItem('theme');
     const preferredTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 
     applyTheme(savedTheme || preferredTheme);
+    loadCurrentUser();
     updateNavbarState();
     window.addEventListener('scroll', updateNavbarState, { passive: true });
+    window.addEventListener('auth:changed', handleAuthChange);
 });
 
 onUnmounted(() => {
     window.removeEventListener('scroll', updateNavbarState);
+    window.removeEventListener('auth:changed', handleAuthChange);
 });
 </script>
 
@@ -72,20 +124,35 @@ onUnmounted(() => {
                 <AppLogo :size="40"/>
             </template>
             <template #end>
-                <div class="navbar-actions">
-
-                    <Button label="Login" icon="pi pi-user" size="small" class="navbar-login" as="a" href="/login" />
-                    <Button label="Register" icon="pi pi-user-plus" size="small" class="navbar-register" as="a" href="/register" />
+                <div class="navbar-end">
+                    <div v-if="currentUser" class="navbar-user-actions">
+                        <span class="navbar-user" :title="currentUser.email">
+                            <i class="pi pi-user"></i>
+                            <span>{{ currentUser.name }}</span>
+                        </span>
+                        <Button
+                            label="Logout"
+                            icon="pi pi-sign-out"
+                            size="small"
+                            class="navbar-login"
+                            :loading="isLoggingOut"
+                            @click="logout"
+                        />
+                    </div>
+                    <div v-else class="navbar-actions">
+                        <Button label="Login" icon="pi pi-user" size="small" class="navbar-login" @click="router.push('/login')" />
+                        <Button label="Register" icon="pi pi-user-plus" size="small" class="navbar-register" @click="router.push('/register')" />
+                    </div>
+                    <Button
+                            :icon="currentTheme === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"
+                            :aria-label="currentTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+                            text
+                            rounded
+                            size="small"
+                            class="theme-toggle"
+                            @click="toggleTheme"
+                        />
                 </div>
-                <Button
-                        :icon="currentTheme === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"
-                        :aria-label="currentTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
-                        text
-                        rounded
-                        size="small"
-                        class="theme-toggle"
-                        @click="toggleTheme"
-                    />
             </template>
         </Menubar>
     </header>
@@ -119,10 +186,47 @@ onUnmounted(() => {
     flex: 0 0 auto;
 }
 
+.navbar-user-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.navbar-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 220px;
+    min-height: 2.25rem;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 999px;
+    color: var(--navbar-text);
+    background: color-mix(in srgb, var(--navbar-bg) 82%, transparent);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.navbar-user span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.navbar-end {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 0 0 auto;
+}
+
 .navbar :deep(.p-menubar) {
     width: 100%;
+    max-width: 1280px;
     height: 72px;
-    padding: 0 150px;
+    margin: 0 auto;
+    padding: 0 clamp(1rem, 4vw, 2.5rem);
     border: none;
     border-radius: 0;
     background: transparent;
@@ -136,6 +240,7 @@ onUnmounted(() => {
 
 .navbar :deep(.p-menubar-root-list) {
     gap: 0.5rem;
+    min-width: 0;
 }
 
 .navbar :deep(.p-menubar-item-link) {
@@ -213,7 +318,6 @@ onUnmounted(() => {
     color: var(--button-secondary-text);
     background: var(--button-secondary-bg);
     border-color: var(--button-border);
-    margin-right: 20px;
 }
 
 .navbar :deep(.navbar-register .pi) {
@@ -263,7 +367,7 @@ onUnmounted(() => {
         align-items: center;
         min-height: 64px;
         height: auto;
-        padding: 0 20px;
+        padding: 0 1rem;
     }
 
     .navbar :deep(.p-menubar-item-link) {
@@ -285,6 +389,40 @@ onUnmounted(() => {
         margin-left: auto;
     }
 
+}
+
+@media (max-width: 640px) {
+    .navbar-actions {
+        gap: 0.375rem;
+    }
+
+    .navbar :deep(.navbar-login .p-button-label) {
+        display: none;
+    }
+
+    .navbar :deep(.navbar-login),
+    .navbar :deep(.navbar-register),
+    .navbar :deep(.theme-toggle) {
+        min-width: 2.5rem;
+    }
+
+    .navbar-user {
+        max-width: 130px;
+    }
+}
+
+@media (max-width: 460px) {
+    .navbar-user span {
+        display: none;
+    }
+
+    .navbar-user {
+        padding-inline: 0.7rem;
+    }
+
+    .navbar :deep(.navbar-register .p-button-label) {
+        display: none;
+    }
 }
 /* Force PrimeVue Menubar submenu to show on hover */
 .navbar :deep(.p-menubar-root-list > .p-menuitem:hover > .p-submenu-list) {

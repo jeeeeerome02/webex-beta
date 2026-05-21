@@ -3,7 +3,7 @@ import { aboutTitle, aboutDescription, aboutStats } from '../../data/siteData';
 </script>
 
 <template>
-    <section class="content-section about-section">
+    <section id="about" class="content-section about-section">
         <div class="about-container">
             <span class="about-label">About Us</span>
             <h2 class="about-title">{{ aboutTitle }}</h2>

@@ -8,7 +8,10 @@ const routes = [
     { 
         path: '/', 
         name: 'Home', 
-        component: Homepage 
+        component: Homepage,
+        meta: {
+            title: null,
+        },
     },
     { 
         path: '/login', 
@@ -18,6 +21,7 @@ const routes = [
             right: LoginPage
         },
         meta: { 
+            title: 'Login',
             leftTitle: 'Smarter Online<br>Examination Starts Here',
             leftDescription: 'Let AI help you create questions and review results automatically. Run exams smoothly without the usual hassle.'
         }
@@ -30,6 +34,7 @@ const routes = [
             right: RegisterPage
         },
         meta: { 
+            title: 'Register',
             leftTitle: 'Join Our Community',
             leftDescription: 'Create your account and start exploring smarter examination tools. Let AI transform your assessment experience.'
         }
@@ -39,6 +44,11 @@ const routes = [
 const router = createRouter({
     history: createWebHistory(),
     routes,
+});
+
+router.afterEach((to) => {
+    const appName = import.meta.env.VITE_APP_NAME || 'Webex - Online Examination System';
+    document.title = to.meta.title ? `${to.meta.title} - ${appName}` : appName;
 });
 
 export default router;

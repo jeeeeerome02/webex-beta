@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue';
+import { reactive, ref } from 'vue';
+import axios from 'axios';
 import { Form } from '@primevue/forms';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
@@ -10,17 +11,23 @@ import { useRouter } from 'vue-router';
 
 const router = useRouter();
 
-const initialValues = ref({
-    username: '',
+const initialValues = reactive({
+    email: '',
     password: '',
     remember: false
 });
 
+const isSubmitting = ref(false);
+const serverError = ref('');
+const serverErrors = ref({});
+
 const resolver = ({ values }) => {
     const errors = {};
 
-    if (!values.username || !values.username.trim()) {
-        errors.username = [{ message: 'Username is required.' }];
+    if (!values.email || !values.email.trim()) {
+        errors.email = [{ message: 'Email is required.' }];
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+        errors.email = [{ message: 'Please enter a valid email address.' }];
     }
 
     if (!values.password) {
@@ -30,9 +37,37 @@ const resolver = ({ values }) => {
     return { errors };
 };
 
-const onFormSubmit = (e) => {
-    if (e.valid) {
-        console.log('Form is valid', e.states);
+const fieldError = (field) => serverErrors.value[field]?.[0] || '';
+
+const onFormSubmit = async (e) => {
+    serverError.value = '';
+    serverErrors.value = {};
+
+    if (!e.valid || isSubmitting.value) {
+        return;
+    }
+
+    isSubmitting.value = true;
+
+    try {
+        const { data } = await axios.post('/login', {
+            email: initialValues.email,
+            password: initialValues.password,
+            remember: initialValues.remember,
+        });
+
+        window.dispatchEvent(new CustomEvent('auth:changed', { detail: data.user }));
+        await router.push('/');
+    } catch (error) {
+        if (error.response?.status === 422) {
+            serverErrors.value = error.response.data.errors || {};
+            serverError.value = error.response.data.message || 'Please check your sign in details.';
+            return;
+        }
+
+        serverError.value = 'Unable to sign in right now. Please try again.';
+    } finally {
+        isSubmitting.value = false;
     }
 };
 </script>
@@ -50,6 +85,15 @@ const onFormSubmit = (e) => {
             <p class="form-subtitle">Welcome back! Please enter your credentials.</p>
         </div>
 
+        <Message
+            v-if="serverError"
+            severity="error"
+            size="small"
+            class="form-alert"
+        >
+            {{ serverError }}
+        </Message>
+
         <Form
             v-slot="$form"
             :resolver="resolver"
@@ -58,21 +102,23 @@ const onFormSubmit = (e) => {
             class="login-form"
         >
             <div class="form-field">
-                <label for="username" class="form-label">Username</label>
+                <label for="email" class="form-label">Email Address</label>
                 <InputText
-                    id="username"
-                    name="username"
-                    type="text"
-                    placeholder="Enter your username"
+                    id="email"
+                    v-model="initialValues.email"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    placeholder="Enter your email"
                     class="form-input"
                 />
                 <Message
-                    v-if="$form.username?.invalid"
+                    v-if="$form.email?.invalid || fieldError('email')"
                     severity="error"
                     size="small"
                     variant="simple"
                 >
-                    {{ $form.username.error?.message }}
+                    {{ $form.email?.error?.message || fieldError('email') }}
                 </Message>
             </div>
 
@@ -80,29 +126,30 @@ const onFormSubmit = (e) => {
                 <label for="password" class="form-label">Password</label>
                 <Password
                     id="password"
+                    v-model="initialValues.password"
                     name="password"
                     type="password"
+                    autocomplete="current-password"
                     placeholder="Enter your password"
                     :feedback="false"
                     class="form-input"
                     inputClass="w-full"
                 />
                 <Message
-                    v-if="$form.password?.invalid"
+                    v-if="$form.password?.invalid || fieldError('password')"
                     severity="error"
                     size="small"
                     variant="simple"
                 >
-                    {{ $form.password.error?.message }}
+                    {{ $form.password?.error?.message || fieldError('password') }}
                 </Message>
             </div>
 
             <div class="form-options">
                 <div class="checkbox-field">
-                    <Checkbox name="remember" binary inputId="remember" />
+                    <Checkbox v-model="initialValues.remember" name="remember" binary inputId="remember" />
                     <label for="remember" class="checkbox-label">Remember me</label>
                 </div>
-                <a href="#" class="forgot-link">Forgot password?</a>
             </div>
 
             <Button
@@ -110,36 +157,10 @@ const onFormSubmit = (e) => {
                 severity="secondary"
                 label="Sign In"
                 class="submit-btn"
+                :loading="isSubmitting"
+                :disabled="isSubmitting"
             />
         </Form>
-
-        <!-- Divider -->
-        <div class="divider">
-            <span>or continue with</span>
-        </div>
-
-        <!-- Social login buttons -->
-        <div class="social-buttons">
-            <Button
-                severity="secondary"
-                variant="outlined"
-                class="social-btn"
-                title="Sign in with Google"
-            >
-                <i class="pi pi-google" style="color: #DB4437; font-size: 1.2rem;"></i>
-                <span>Google</span>
-            </Button>
-
-            <Button
-                severity="secondary"
-                variant="outlined"
-                class="social-btn"
-                title="Sign in with GitHub"
-            >
-                <i class="pi pi-github" style="color: #333; font-size: 1.2rem;"></i>
-                <span>GitHub</span>
-            </Button>
-        </div>
 
         <!-- Sign up prompt -->
         <div class="signup-wrapper">
@@ -238,14 +259,21 @@ const onFormSubmit = (e) => {
 :deep(.p-inputtext),
 :deep(.p-password input) {
     width: 100%;
+    min-height: 46px;
+    box-sizing: border-box;
     padding: 0.75rem 0.875rem;
     border: 1.5px solid var(--surface-border);
-    border-radius: 12px;
+    border-radius: 8px;
     background: var(--surface-bg);
     color: var(--page-text);
     font-size: 0.875rem;
     transition: all 0.2s ease;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+:deep(.p-password) {
+    display: block;
+    width: 100%;
 }
 
 :deep(.p-inputtext:focus),
@@ -261,13 +289,17 @@ const onFormSubmit = (e) => {
 }
 
 :deep(.p-password-overlay) {
-    border-radius: 12px;
+    border-radius: 8px;
 }
 
 :deep(.p-message) {
     padding: 0.5rem 0.75rem;
     font-size: 0.8125rem;
     margin-top: 0.25rem;
+}
+
+.form-alert {
+    width: 100%;
 }
 
 /* Form Options */
@@ -285,24 +317,15 @@ const onFormSubmit = (e) => {
     gap: 0.5rem;
 }
 
+:deep(.p-checkbox) {
+    flex: 0 0 auto;
+}
+
 .checkbox-label {
     font-size: 0.875rem;
     color: var(--muted-text);
     margin: 0;
     user-select: none;
-}
-
-.forgot-link {
-    font-size: 0.875rem;
-    color: #111;
-    text-decoration: none;
-    font-weight: 600;
-    transition: opacity 0.2s;
-}
-
-.forgot-link:hover {
-    opacity: 0.7;
-    text-decoration: underline;
 }
 
 /* Submit Button */
@@ -311,7 +334,7 @@ const onFormSubmit = (e) => {
     padding: 0.875rem 1.5rem;
     font-size: 0.875rem;
     font-weight: 600;
-    border-radius: 12px;
+    border-radius: 8px;
     margin-top: 0.5rem;
     background: #111;
     color: #fff;
@@ -322,66 +345,6 @@ const onFormSubmit = (e) => {
 .submit-btn:hover {
     background: #222;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-
-/* Divider */
-.divider {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    margin: 1.5rem 0;
-}
-
-.divider::before,
-.divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--surface-border);
-}
-
-.divider span {
-    padding: 0 1rem;
-    font-size: 0.75rem;
-    color: var(--muted-text);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 500;
-    white-space: nowrap;
-}
-
-/* Social Buttons */
-.social-buttons {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-    width: 100%;
-}
-
-.social-btn {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    border-radius: 12px;
-    background: transparent;
-    color: #111;
-    border: 1.5px solid var(--surface-border);
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-}
-
-.social-btn:hover {
-    background: rgba(0, 0, 0, 0.04);
-    border-color: #111;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.social-btn:active {
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 /* Sign Up Prompt with animation */
@@ -435,18 +398,6 @@ const onFormSubmit = (e) => {
         font-size: 1.75rem;
     }
 
-    .social-btn span {
-        display: none;
-    }
-
-    .social-btn {
-        padding: 0.875rem;
-    }
-
-    .social-btn i {
-        margin: 0;
-    }
-
     .back-button {
         font-size: 0.8125rem;
     }
@@ -462,17 +413,4 @@ const onFormSubmit = (e) => {
     }
 }
 
-/* Dark theme */
-:root[data-theme='dark'] .form-title,
-:root[data-theme='dark'] .form-label,
-:root[data-theme='dark'] .forgot-link,
-:root[data-theme='dark'] .submit-btn,
-:root[data-theme='dark'] .social-btn,
-:root[data-theme='dark'] .signup-link {
-    color: #111;
-}
-
-:root[data-theme='dark'] .social-btn:hover {
-    background: rgba(0, 0, 0, 0.04);
-}
 </style>

@@ -22,7 +22,7 @@ function handleSubmit() {
 </script>
 
 <template>
-    <section class="content-section contact-section">
+    <section id="contact" class="content-section contact-section">
         <div class="contact-container">
             <span class="contact-label">Contact Us</span>
             <h2 class="contact-title">Get in Touch</h2>
@@ -239,7 +239,7 @@ function handleSubmit() {
     align-items: flex-start;
     gap: 1rem;
     padding: 1.25rem;
-    border-radius: 12px;
+    border-radius: 8px;
     background: var(--surface-bg);
     border: 1.5px solid var(--surface-border);
     transition: box-shadow 0.2s ease;

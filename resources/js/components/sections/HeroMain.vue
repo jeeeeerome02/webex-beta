@@ -1,15 +1,25 @@
 <script setup>
 import Button from 'primevue/button';
+import { useRouter } from 'vue-router';
 import {
     heroTagline,
     heroDescription,
     heroCard2Title,
     heroCard2Description,
 } from '../../data/siteData';
+
+const router = useRouter();
+
+const scrollToFeatures = () => {
+    document.getElementById('features')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+    });
+};
 </script>
 
 <template>
-    <section class="hero">
+    <section id="home" class="hero">
         <div class="abstract-background" aria-hidden="true">
             <span class="wave wave-back"></span>
             <span class="wave wave-middle"></span>
@@ -27,20 +37,24 @@ import {
                     <h1>Smarter Online</h1>
                     <h2>Examination Starts Here</h2>
                     <p>{{ heroDescription }}</p>
-                     <Button
-                        label="Try It Now"
-                        icon="pi pi-play"
-                        size="small"
-                        severity="contrast"
-                        class="btn-get-started"
-                    />
-                    <Button
-                        label="Features"
-                        icon="pi pi-sliders-h"
-                        size="small"
-                        severity="secondary"
-                        class="btn-features"
-                    />
+                    <div class="hero-actions">
+                        <Button
+                            label="Try It Now"
+                            icon="pi pi-play"
+                            size="small"
+                            severity="contrast"
+                            class="btn-get-started"
+                            @click="router.push('/register')"
+                        />
+                        <Button
+                            label="Features"
+                            icon="pi pi-sliders-h"
+                            size="small"
+                            severity="secondary"
+                            class="btn-features"
+                            @click="scrollToFeatures"
+                        />
+                    </div>
                 </div>
                 <p class="footer-hero">
                     {{ heroTagline }}
@@ -63,9 +77,11 @@ import {
     position: relative;
     overflow: hidden;
     isolation: isolate;
-    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    min-height: clamp(600px, 86svh, 780px);
     width: 100%;
-    padding: 140px 80px 60px;
+    padding: 136px clamp(1.25rem, 5vw, 5rem) 72px;
     background: var(--content-bg);
 }
 
@@ -151,10 +167,11 @@ import {
     border-radius: 0 0 78% 82% / 0 0 100% 100%;
 }
 
-.btn-get-started,
-.btn-features {
-    margin-top: 12px;
-    margin-right: 8px;
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
 }
 
 .btn-get-started {
@@ -182,90 +199,106 @@ import {
 }
 
 .card-container {
-    display: flex;
-    gap: 20px;
-    justify-content: center;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+    align-items: center;
+    gap: clamp(2rem, 6vw, 5rem);
+    width: min(100%, 1180px);
+    margin: 0 auto;
 }
 
 .card {
-    padding: 30px;
+    min-width: 0;
+    padding: 0;
     border: none;
     border-radius: 8px;
-    width: 45%;
     background: transparent;
     backdrop-filter: none;
 }
 
-.card:first-child {
-    width: 55%;
-}
-
 .card:last-child {
-    width: 35%;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    border-left: 1px solid var(--surface-border);
+    padding-left: clamp(1.5rem, 4vw, 3rem);
 }
 
 .hero-content-left h1 {
     font-weight: bold;
-    font-size: 78px;
+    font-size: clamp(3.25rem, 7vw, 5.75rem);
+    line-height: 0.95;
+    margin: 0;
     color: var(--page-text);
+    letter-spacing: 0;
 }
 
 .hero-content-left h2 {
     font-weight: bold;
-    font-size: 62px;
+    font-size: clamp(2.25rem, 5vw, 4.5rem);
+    line-height: 1;
+    margin: 0.25rem 0 1.25rem;
     color: var(--page-text);
+    letter-spacing: 0;
 }
 
 .hero-content-right .logo {
-    font-size: 32px;
+    font-size: clamp(1.75rem, 3vw, 2.25rem);
+    line-height: 1.1;
+    margin: 0 0 1rem;
     color: var(--page-text);
+    letter-spacing: 0;
 }
 
 .hero-content-right p,
 .hero-content-left p {
-    font-size: 20px;
+    max-width: 640px;
+    font-size: clamp(1rem, 1.6vw, 1.25rem);
     color: var(--muted-text);
-    margin-bottom: 10px;
+    line-height: 1.65;
+    margin: 0;
 }
 
 .footer-hero {
+    max-width: 520px;
     font-size: 16px;
     color: var(--muted-text);
-    margin-top: 20px;
+    line-height: 1.6;
+    margin: 2rem 0 0;
 }
 
 @media (max-width: 960px) {
     .hero {
-        padding: 110px 20px 30px;
+        min-height: auto;
+        padding: 108px 1.25rem 48px;
     }
 
-    .card,
-    .card:first-child,
+    .card-container {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
     .card:last-child {
-        width: 100%;
-    }
-
-    .btn-get-started,
-    .btn-features {
-        width: 100%;
+        border-left: 0;
+        border-top: 1px solid var(--surface-border);
+        padding: 1.5rem 0 0;
     }
 }
 @media (max-width: 600px) {
     .hero {
-        padding: 80px 6px 16px;
+        padding: 88px 1rem 40px;
     }
     .card-container {
-        gap: 12px;
+        gap: 1.5rem;
     }
     .hero-content-left h1 {
-        font-size: 2.2rem;
+        font-size: 2.85rem;
     }
     .hero-content-left h2 {
-        font-size: 1.3rem;
+        font-size: 1.95rem;
     }
     .hero-content-right .logo {
-        font-size: 1.1rem;
+        font-size: 1.5rem;
     }
     .hero-content-right p,
     .hero-content-left p {
@@ -274,15 +307,11 @@ import {
     .footer-hero {
         font-size: 0.95rem;
     }
-    .card {
-        padding: 16px;
-    }
     .btn-get-started,
     .btn-features {
+        width: 100%;
         font-size: 0.95rem;
         padding: 0.6rem 0.8rem;
     }
 }
 </style>
-
-

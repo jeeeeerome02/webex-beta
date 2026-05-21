@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import './bootstrap';
 
 // PrimeVue
 import PrimeVue from 'primevue/config';
