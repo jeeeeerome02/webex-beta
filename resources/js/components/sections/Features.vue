@@ -7,14 +7,16 @@
             </div>
             <div class="features-grid">
                 <div
-                    v-for="(feature, index) in features"
-                    :key="index"
-                    class="feature-card"
-                >
+                v-for="(feature, index) in features"
+                :key="index"
+                class="feature-card"
+            >
+                <span class="feature-icon-wrap">
                     <span class="feature-icon" v-html="feature.icon"></span>
-                    <h3 class="feature-title">{{ feature.title }}</h3>
-                    <p class="feature-text">{{ feature.description }}</p>
-                </div>
+                </span>
+                <h3 class="feature-title">{{ feature.title }}</h3>
+                <p class="feature-text">{{ feature.description }}</p>
+            </div>
             </div>
         </div>
     </section>
@@ -31,6 +33,8 @@
 }
 
 .features-header {
+    max-width: 640px;
+    margin-inline: auto;
     text-align: center;
     margin-bottom: 3rem;
 }
@@ -39,8 +43,8 @@
     font-size: 2.5rem;
     font-weight: 800;
     margin: 0;
-    letter-spacing: -1px;
-    color: #111;
+    letter-spacing: 0;
+    color: var(--page-text);
 }
 
 .features-subtitle {
@@ -51,30 +55,47 @@
 
 .features-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    gap: clamp(1rem, 2vw, 1.5rem);
 }
 
 .feature-card {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    align-items: flex-start;
+    gap: 0.875rem;
+    min-height: 230px;
+    height: 100%;
     padding: 1.75rem;
     border-radius: 8px;
-    background: #fff;
+    background: var(--surface-bg);
     border: 1.5px solid var(--surface-border);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--page-text) 6%, transparent);
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .feature-card:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    border-color: #111;
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--button-primary-bg) 48%, var(--surface-border));
+    box-shadow: 0 14px 34px color-mix(in srgb, var(--page-text) 10%, transparent);
+}
+
+.feature-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 8px;
+    color: var(--button-primary-text);
+    background: var(--button-primary-bg);
+    flex: 0 0 auto;
 }
 
 .feature-icon {
-    font-size: 1.5rem;
-    color: #111;
+    font-size: 1.2rem;
+    color: currentColor;
     display: block;
     line-height: 1;
 }
@@ -82,9 +103,9 @@
 .feature-title {
     font-size: 1.125rem;
     font-weight: 700;
-    color: #111;
+    color: var(--page-text);
     margin: 0;
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
 }
 
 .feature-text {
@@ -92,6 +113,7 @@
     color: var(--muted-text);
     line-height: 1.65;
     margin: 0;
+    max-width: 34rem;
 }
 
 @media (max-width: 960px) {
@@ -105,8 +127,18 @@
         grid-template-columns: 1fr;
         gap: 1rem;
     }
+    .features-header {
+        margin-bottom: 2rem;
+        text-align: left;
+    }
     .features-title {
         font-size: 1.75rem;
+    }
+    .features-subtitle {
+        font-size: 1rem;
+    }
+    .feature-card {
+        min-height: auto;
     }
 }
 </style>

@@ -119,3 +119,101 @@ export const testimonials = [
         text: 'As a teacher, I love how easy it is to create customized assessments and track student progress.',
     },
 ];
+
+// ── How It Works ──
+export const howItWorks = [
+    {
+        step: 1,
+        icon: '<i class="pi pi-file-edit"></i>',
+        title: 'Create Your Exam',
+        description:
+            'Choose from AI-generated questions or build your own using our template library. Set difficulty, duration, and grading rules in minutes.',
+    },
+    {
+        step: 2,
+        icon: '<i class="pi pi-send"></i>',
+        title: 'Distribute Instantly',
+        description:
+            'Share exams via email, links, or embed them in your LMS. Students can access them from any device — no installations required.',
+    },
+    {
+        step: 3,
+        icon: '<i class="pi pi-chart-bar"></i>',
+        title: 'Auto-Grade & Analyze',
+        description:
+            'AI evaluates answers in real time. Get instant results, class-wide analytics, and detailed per-student performance reports.',
+    },
+];
+
+// ── Pricing ──
+export const pricingPlans = [
+    {
+        name: 'Starter',
+        price: 'Free',
+        period: 'forever',
+        description: 'Perfect for individual educators getting started.',
+        features: [
+            'Up to 3 exams per month',
+            'AI question generator (10 Qs/exam)',
+            'Basic auto-grading',
+            'Email support',
+        ],
+        cta: 'Get Started',
+        highlight: false,
+    },
+    {
+        name: 'Pro',
+        price: '$29',
+        period: '/month',
+        description: 'For schools and departments with regular exam needs.',
+        features: [
+            'Unlimited exams',
+            'AI question generator (unlimited)',
+            'Advanced analytics & reports',
+            'Custom templates',
+            'Priority support',
+        ],
+        cta: 'Start Free Trial',
+        highlight: true,
+    },
+    {
+        name: 'Enterprise',
+        price: '$99',
+        period: '/month',
+        description: 'For institutions needing full-scale deployment.',
+        features: [
+            'Everything in Pro',
+            'LMS integration',
+            'Role-based access control',
+            'Dedicated account manager',
+            'Custom branding',
+            'SLA & compliance',
+        ],
+        cta: 'Contact Sales',
+        highlight: false,
+    },
+];
+
+// ── FAQ ──
+export const faqItems = [
+    {
+        question: 'How does the AI question generator work?',
+        answer: 'Our AI analyzes your curriculum materials and generates relevant questions across various formats — multiple choice, essay, fill-in-the-blank, and more. You can review, edit, and customize every question before including it in your exam.',
+    },
+    {
+        question: 'Can I integrate with my existing LMS?',
+        answer: 'Yes. Our Enterprise plan supports integration with popular Learning Management Systems including Canvas, Moodle, Blackboard, and Google Classroom. Setup takes just a few clicks.',
+    },
+    {
+        question: 'Is my data secure?',
+        answer: 'Absolutely. We use end-to-end encryption for all data in transit and at rest. Role-based access controls ensure only authorized users can view sensitive information. We are compliant with FERPA and GDPR.',
+    },
+    {
+        question: 'What kind of support do you offer?',
+        answer: 'Starter users get email support with a 48-hour response time. Pro users receive priority support with 12-hour responses. Enterprise customers get a dedicated account manager with 24/7 phone and chat support.',
+    },
+    {
+        question: 'Can I try before I buy?',
+        answer: 'Absolutely! The Pro plan comes with a 14-day free trial — no credit card required. You get full access to all Pro features, and you can cancel anytime during the trial period.',
+    },
+];
