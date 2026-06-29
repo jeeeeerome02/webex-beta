@@ -1,7 +1,7 @@
 <template>
     <section id="features" class="content-section features-section">
         <div class="features-container">
-            <div class="features-header">
+            <div class="features-header" v-reveal>
                 <h2 class="features-title">Features</h2>
                 <p class="features-subtitle">Discover what makes our product stand out</p>
             </div>
@@ -10,6 +10,7 @@
                 v-for="(feature, index) in features"
                 :key="index"
                 class="feature-card"
+                v-reveal="{ delay: (index % 3) * 100 }"
             >
                 <span class="feature-icon-wrap">
                     <span class="feature-icon" v-html="feature.icon"></span>

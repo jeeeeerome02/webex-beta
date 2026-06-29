@@ -166,8 +166,8 @@ const onFormSubmit = async (e) => {
         <div class="signup-wrapper">
             <p class="signup-prompt">
                 Don't have an account?
-                <a 
-                    href="/register" 
+                <a
+                    href="/register"
                     class="signup-link"
                     @click.prevent="router.push('/register')"
                 >

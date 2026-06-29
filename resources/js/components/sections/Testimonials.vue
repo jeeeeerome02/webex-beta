@@ -11,7 +11,7 @@ const activeIndex = ref(0);
 
 <template>
   <section id="testimonials" class="content-section testimonials-section">
-    <div class="testimonials-container">
+    <div class="testimonials-container" v-reveal>
       <h2 class="section-title">What Our Users Say</h2>
 
       <Carousel

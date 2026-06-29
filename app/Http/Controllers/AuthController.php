@@ -8,13 +8,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Cookie;
 
 class AuthController extends Controller
 {
+    private const COOKIE_NAME = 'access_token';
+
     public function user(Request $request): JsonResponse
     {
+        $user = Auth::guard('api')->user();
+
         return response()->json([
-            'user' => $request->user() ? $this->serializeUser($request->user()) : null,
+            'user' => $user ? $this->serializeUser($user) : null,
         ]);
     }
 
@@ -50,13 +55,12 @@ class AuthController extends Controller
             'postal_code' => $validated['postalCode'],
         ]);
 
-        Auth::login($user);
-        $request->session()->regenerate();
+        $token = Auth::guard('api')->login($user);
 
         return response()->json([
             'message' => 'Account created successfully.',
             'user' => $this->serializeUser($user),
-        ], 201);
+        ], 201)->withCookie($this->tokenCookie($token));
     }
 
     public function login(Request $request): JsonResponse
@@ -67,36 +71,33 @@ class AuthController extends Controller
             'remember' => ['sometimes', 'boolean'],
         ]);
 
-        $remember = (bool) ($validated['remember'] ?? false);
-
-        if (! Auth::attempt([
+        $token = Auth::guard('api')->attempt([
             'email' => $validated['email'],
             'password' => $validated['password'],
-        ], $remember)) {
+        ]);
+
+        if (! $token) {
             throw ValidationException::withMessages([
                 'email' => ['These credentials do not match our records.'],
             ]);
         }
 
-        $request->session()->regenerate();
-
         return response()->json([
             'message' => 'Signed in successfully.',
-            'user' => $this->serializeUser($request->user()),
-        ]);
+            'user' => $this->serializeUser(Auth::guard('api')->user()),
+        ])->withCookie($this->tokenCookie($token));
     }
 
     public function logout(Request $request): JsonResponse
     {
-        Auth::guard('web')->logout();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        if (Auth::guard('api')->check()) {
+            Auth::guard('api')->logout();
+        }
 
         return response()->json([
             'message' => 'Signed out successfully.',
             'user' => null,
-        ]);
+        ])->withCookie($this->forgetCookie());
     }
 
     private function serializeUser(User $user): array
@@ -108,5 +109,35 @@ class AuthController extends Controller
             'role' => $user->role,
             'course' => $user->course,
         ];
+    }
+
+    private function tokenCookie(string $token): Cookie
+    {
+        $minutes = (int) config('jwt.ttl', 60);
+
+        return cookie(
+            name: self::COOKIE_NAME,
+            value: $token,
+            minutes: $minutes,
+            path: '/',
+            domain: null,
+            secure: ! app()->environment('local'),
+            httpOnly: true,
+            sameSite: 'lax',
+        );
+    }
+
+    private function forgetCookie(): Cookie
+    {
+        return cookie(
+            name: self::COOKIE_NAME,
+            value: '',
+            minutes: -1,
+            path: '/',
+            domain: null,
+            secure: ! app()->environment('local'),
+            httpOnly: true,
+            sameSite: 'lax',
+        );
     }
 }

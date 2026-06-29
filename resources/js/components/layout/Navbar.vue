@@ -37,7 +37,7 @@ const items = ref([
             {
                 label: 'How it works',
                 icon: 'pi pi-angle-right',
-                command: () => scrollToSection('features'),
+                command: () => scrollToSection('how-it-works'),
                 description: 'Create questions with AI, deliver exams to students, and review results in one seamless workflow.'
             },
             {
@@ -48,6 +48,8 @@ const items = ref([
             }
         ]
     },
+    { label: 'Pricing', command: () => scrollToSection('pricing') },
+    { label: 'FAQ', command: () => scrollToSection('faq') },
     { label: 'Contact', command: () => scrollToSection('contact') },
 ]);
 

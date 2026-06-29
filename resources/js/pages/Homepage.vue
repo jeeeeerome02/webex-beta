@@ -2,8 +2,11 @@
 import Navbar from '../components/layout/Navbar.vue';
 import HeroMain from '../components/sections/HeroMain.vue';
 import Features from '../components/sections/Features.vue';
-import Testimonials from '../components/sections/Testimonials.vue';
+import HowItWorks from '../components/sections/HowItWorks.vue';
 import About from '../components/sections/About.vue';
+import Pricing from '../components/sections/Pricing.vue';
+import Testimonials from '../components/sections/Testimonials.vue';
+import FAQ from '../components/sections/FAQ.vue';
 import Contact from '../components/sections/Contact.vue';
 import Footer from '../components/sections/Footer.vue';
 </script>
@@ -13,8 +16,11 @@ import Footer from '../components/sections/Footer.vue';
     <main class="site-content">
         <HeroMain />
         <Features />
-        <Testimonials />
+        <HowItWorks />
         <About />
+        <Pricing />
+        <Testimonials />
+        <FAQ />
         <Contact />
         <Footer />
     </main>
