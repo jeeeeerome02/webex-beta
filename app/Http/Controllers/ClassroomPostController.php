@@ -1,0 +1,134 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Classroom;
+use App\Models\ClassroomPost;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class ClassroomPostController extends Controller
+{
+    private function authorize(string $token): array
+    {
+        $user = Auth::guard('api')->user();
+        $classroom = Classroom::where('invite_token', $token)->firstOrFail();
+        $isOwner = $classroom->teacher_id === $user->id;
+        $isMember = $classroom->members()->where('user_id', $user->id)->wherePivot('status', 'approved')->exists();
+
+        abort_unless($isOwner || $isMember, 403, 'No access to this class.');
+
+        return [$user, $classroom, $isOwner];
+    }
+
+    public function index(string $token): JsonResponse
+    {
+        [$user, $classroom, $isOwner] = $this->authorize($token);
+
+        $posts = $classroom->posts()
+            ->with(['author', 'comments.author', 'likes'])
+            ->withCount('likes')
+            ->latest()
+            ->get()
+            ->filter(fn ($p) => ! $p->is_hidden || $isOwner || $p->user_id === $user->id)
+            ->map(fn ($p) => $this->serialize($p, $user->id, $isOwner))
+            ->values();
+
+        return response()->json(['posts' => $posts]);
+    }
+
+    public function store(Request $request, string $token): JsonResponse
+    {
+        [$user, $classroom, $isOwner] = $this->authorize($token);
+
+        if (! $isOwner && ! $classroom->allow_posts) {
+            return response()->json(['message' => 'Posting is disabled for members.'], 403);
+        }
+
+        $data = $request->validate(['body' => ['required', 'string', 'max:20000']]);
+
+        $clean = strip_tags($data['body'], '<p><br><b><strong><i><em><u><s><ul><ol><li><a><h1><h2><h3><blockquote><pre><span>');
+        $post = $classroom->posts()->create(['user_id' => $user->id, 'body' => $clean]);
+        $post->loadCount('likes')->load(['author', 'comments.author', 'likes']);
+
+        return response()->json(['post' => $this->serialize($post, $user->id, $isOwner)], 201);
+    }
+
+    public function like(string $token, int $postId): JsonResponse
+    {
+        [$user] = $this->authorize($token);
+        $post = ClassroomPost::findOrFail($postId);
+
+        $existing = $post->likes()->where('user_id', $user->id)->first();
+        if ($existing) {
+            $existing->delete();
+            $liked = false;
+        } else {
+            $post->likes()->create(['user_id' => $user->id]);
+            $liked = true;
+        }
+
+        return response()->json(['liked' => $liked, 'count' => $post->likes()->count()]);
+    }
+
+    public function comment(Request $request, string $token, int $postId): JsonResponse
+    {
+        [$user] = $this->authorize($token);
+        $post = ClassroomPost::findOrFail($postId);
+
+        if (! $post->comments_enabled) {
+            return response()->json(['message' => 'Comments are turned off.'], 403);
+        }
+
+        $data = $request->validate(['body' => ['required', 'string', 'max:1000']]);
+        $comment = $post->comments()->create(['user_id' => $user->id, 'body' => $data['body']]);
+        $comment->load('author');
+
+        return response()->json(['comment' => [
+            'id' => $comment->id,
+            'body' => $comment->body,
+            'author' => $comment->author->name,
+        ]]);
+    }
+
+    public function toggleComments(string $token, int $postId): JsonResponse
+    {
+        [$user, , $isOwner] = $this->authorize($token);
+        $post = ClassroomPost::findOrFail($postId);
+        abort_unless($isOwner || $post->user_id === $user->id, 403);
+
+        $post->update(['comments_enabled' => ! $post->comments_enabled]);
+
+        return response()->json(['comments_enabled' => $post->comments_enabled]);
+    }
+
+    public function hide(string $token, int $postId): JsonResponse
+    {
+        [$user, , $isOwner] = $this->authorize($token);
+        $post = ClassroomPost::findOrFail($postId);
+        abort_unless($isOwner || $post->user_id === $user->id, 403);
+
+        $post->update(['is_hidden' => ! $post->is_hidden]);
+
+        return response()->json(['is_hidden' => $post->is_hidden]);
+    }
+
+    private function serialize(ClassroomPost $p, int $uid, bool $isOwner): array
+    {
+        return [
+            'id' => $p->id,
+            'body' => $p->body,
+            'author' => $p->author->name,
+            'is_mine' => $p->user_id === $uid,
+            'is_hidden' => $p->is_hidden,
+            'comments_enabled' => $p->comments_enabled,
+            'likes_count' => $p->likes_count ?? $p->likes()->count(),
+            'liked' => $p->likes->contains('user_id', $uid),
+            'created_at' => $p->created_at->diffForHumans(),
+            'comments' => $p->comments->map(fn ($c) => [
+                'id' => $c->id, 'body' => $c->body, 'author' => $c->author->name,
+            ]),
+        ];
+    }
+}

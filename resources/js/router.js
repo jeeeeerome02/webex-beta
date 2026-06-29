@@ -9,6 +9,8 @@ import DashboardHome from './pages/dashboard/DashboardHome.vue';
 import DashboardProfile from './pages/dashboard/DashboardProfile.vue';
 import DashboardPlaceholder from './pages/dashboard/DashboardPlaceholder.vue';
 import DashboardClasses from './pages/dashboard/DashboardClasses.vue';
+import DashboardClassDetail from './pages/dashboard/DashboardClassDetail.vue';
+import DashboardUserProfile from './pages/dashboard/DashboardUserProfile.vue';
 import ClassInvite from './pages/ClassInvite.vue';
 
 const routes = [
@@ -53,6 +55,8 @@ const routes = [
         children: [
             { path: '', name: 'Dashboard', component: DashboardHome },
             { path: 'classes', name: 'DashboardClasses', component: DashboardClasses },
+            { path: 'classes/:id', name: 'DashboardClassDetail', component: DashboardClassDetail },
+            { path: 'users/:id', name: 'DashboardUserProfile', component: DashboardUserProfile },
             { path: 'chat', name: 'DashboardChat', component: DashboardPlaceholder },
             { path: 'profile', name: 'DashboardProfile', component: DashboardProfile },
         ],

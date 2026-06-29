@@ -20,6 +20,7 @@
         "@primevue/forms": "^4.5.5",
         "primeicons": "^7.0.0",
         "primevue": "^4.5.5",
+        "quill": "^2.0.3",
         "vue": "^3.5.33",
         "vue-router": "^4.6.4"
     }

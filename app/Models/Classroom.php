@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Classroom extends Model
@@ -16,9 +17,19 @@ class Classroom extends Model
         'teacher_id',
         'name',
         'description',
+        'course_type',
         'theme_color',
         'type',
         'invite_token',
+        'join_approval',
+        'leave_approval',
+        'allow_posts',
+    ];
+
+    protected $casts = [
+        'join_approval' => 'boolean',
+        'leave_approval' => 'boolean',
+        'allow_posts' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -38,7 +49,12 @@ class Classroom extends Model
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'classroom_members')
-            ->withPivot('status')
+            ->withPivot('status', 'is_co_teacher')
             ->withTimestamps();
+    }
+
+    public function posts(): HasMany
+    {
+        return $this->hasMany(ClassroomPost::class);
     }
 }

@@ -92,4 +92,9 @@ class User extends Authenticatable implements JWTSubject
             ->withPivot('status')
             ->withTimestamps();
     }
+
+    public function awards(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Award::class, 'user_id');
+    }
 }

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClassroomController;
+use App\Http\Controllers\ClassroomPostController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('jwt.cookie')->group(function () {
@@ -12,9 +13,27 @@ Route::middleware('jwt.cookie')->group(function () {
 
     Route::get('/api/classrooms', [ClassroomController::class, 'index']);
     Route::post('/api/classrooms', [ClassroomController::class, 'store']);
+    Route::get('/api/notifications', [ClassroomController::class, 'notifications']);
     Route::get('/api/classrooms/invite/{token}', [ClassroomController::class, 'showByToken']);
     Route::post('/api/classrooms/invite/{token}/join', [ClassroomController::class, 'join']);
+    Route::get('/api/classrooms/{token}', [ClassroomController::class, 'show']);
+    Route::put('/api/classrooms/{token}', [ClassroomController::class, 'update']);
+    Route::post('/api/classrooms/{token}/archive', [ClassroomController::class, 'archive']);
+    Route::post('/api/classrooms/{token}/members/{userId}/approve', [ClassroomController::class, 'approveMember']);
+    Route::post('/api/classrooms/{token}/members/{userId}/co-teacher', [ClassroomController::class, 'assignCoTeacher']);
+    Route::post('/api/classrooms/{token}/members/{userId}/award', [ClassroomController::class, 'giveAward']);
+    Route::delete('/api/classrooms/{token}/members/{userId}', [ClassroomController::class, 'removeMember']);
+    Route::post('/api/classrooms/{token}/leave', [ClassroomController::class, 'leave']);
+    Route::get('/api/users/{id}', [ClassroomController::class, 'userProfile']);
+
+    Route::get('/api/classrooms/{token}/posts', [ClassroomPostController::class, 'index']);
+    Route::post('/api/classrooms/{token}/posts', [ClassroomPostController::class, 'store']);
+    Route::post('/api/classrooms/{token}/posts/{postId}/like', [ClassroomPostController::class, 'like']);
+    Route::post('/api/classrooms/{token}/posts/{postId}/comments', [ClassroomPostController::class, 'comment']);
+    Route::post('/api/classrooms/{token}/posts/{postId}/toggle-comments', [ClassroomPostController::class, 'toggleComments']);
+    Route::post('/api/classrooms/{token}/posts/{postId}/hide', [ClassroomPostController::class, 'hide']);
 });
+
 
 Route::get('/', function () {
     return view('welcome');

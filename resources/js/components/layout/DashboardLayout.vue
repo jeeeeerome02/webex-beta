@@ -16,12 +16,24 @@ const isLoggingOut = ref(false);
 
 const menu = [
     { label: 'Overview', icon: 'pi pi-th-large', to: '/dashboard' },
-    { label: 'Classes', icon: 'pi pi-book', to: '/dashboard/classes' },
+    { label: 'Classes', icon: 'pi pi-book', to: '/dashboard/classes', key: 'classes' },
     { label: 'Chat', icon: 'pi pi-comments', to: '/dashboard/chat' },
     { label: 'Profile', icon: 'pi pi-user', to: '/dashboard/profile' },
 ];
 
-const pageTitle = computed(() => menu.find((m) => m.to === route.path)?.label || 'Dashboard');
+const notifications = ref({ classes: 0 });
+
+const loadNotifications = async () => {
+    try {
+        const { data } = await axios.get('/api/notifications');
+        notifications.value = data;
+    } catch {
+        notifications.value = { classes: 0 };
+    }
+};
+
+const pageTitle = computed(() => menu.find((m) => m.to === route.path)?.label || (route.name === 'DashboardClassDetail' ? 'Class' : 'Dashboard'));
+const showBack = computed(() => route.name === 'DashboardClassDetail');
 const initials = computed(() =>
     (user.value?.name || 'U')
         .split(' ')
@@ -60,6 +72,7 @@ const loadUser = async () => {
 
 onMounted(() => {
     loadUser();
+    loadNotifications();
     window.addEventListener('auth:changed', (e) => (user.value = e.detail || null));
 });
 onUnmounted(() => {
@@ -84,6 +97,7 @@ onUnmounted(() => {
                 >
                     <i :class="item.icon"></i>
                     <span>{{ item.label }}</span>
+                    <span v-if="item.key && notifications[item.key]" class="dash-badge">{{ notifications[item.key] }}</span>
                 </button>
             </nav>
             <Button
@@ -110,6 +124,7 @@ onUnmounted(() => {
                 >
                     <i :class="item.icon"></i>
                     <span>{{ item.label }}</span>
+                    <span v-if="item.key && notifications[item.key]" class="dash-badge">{{ notifications[item.key] }}</span>
                 </button>
             </nav>
         </Drawer>
@@ -125,6 +140,14 @@ onUnmounted(() => {
                         class="dash-burger"
                         aria-label="Open menu"
                         @click="mobileOpen = true"
+                    />
+                    <Button
+                        v-if="showBack"
+                        icon="pi pi-arrow-left"
+                        text
+                        rounded
+                        aria-label="Back to classes"
+                        @click="router.push('/dashboard/classes')"
                     />
                     <h1 class="dash-title">{{ pageTitle }}</h1>
                 </div>
@@ -204,6 +227,20 @@ onUnmounted(() => {
 .dash-nav-item.active {
     background: var(--button-primary-bg);
     color: var(--button-primary-text);
+}
+
+.dash-badge {
+    margin-left: auto;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
 }
 
 .dash-logout {
