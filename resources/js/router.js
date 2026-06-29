@@ -1,49 +1,83 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import axios from 'axios';
 import Homepage from './pages/Homepage.vue';
 import LoginPage from './pages/LoginPage.vue';
 import RegisterPage from './pages/RegisterPage.vue';
 import LeftAuthPanel from './components/layout/LeftAuthPanel.vue';
+import DashboardLayout from './components/layout/DashboardLayout.vue';
+import DashboardHome from './pages/dashboard/DashboardHome.vue';
+import DashboardProfile from './pages/dashboard/DashboardProfile.vue';
+import DashboardPlaceholder from './pages/dashboard/DashboardPlaceholder.vue';
 
 const routes = [
-    { 
-        path: '/', 
-        name: 'Home', 
+    {
+        path: '/',
+        name: 'Home',
         component: Homepage,
         meta: {
             title: null,
         },
     },
-    { 
-        path: '/login', 
+    {
+        path: '/login',
         name: 'Login',
         components: {
             left: LeftAuthPanel,
             right: LoginPage
         },
-        meta: { 
+        meta: {
             title: 'Login',
             leftTitle: 'Smarter Online<br>Examination Starts Here',
             leftDescription: 'Let AI help you create questions and review results automatically. Run exams smoothly without the usual hassle.'
         }
     },
-    { 
-        path: '/register', 
+    {
+        path: '/register',
         name: 'Register',
         components: {
             left: LeftAuthPanel,
             right: RegisterPage
         },
-        meta: { 
+        meta: {
             title: 'Register',
             leftTitle: 'Join Our Community',
             leftDescription: 'Create your account and start exploring smarter examination tools. Let AI transform your assessment experience.'
         }
+    },
+    {
+        path: '/dashboard',
+        component: DashboardLayout,
+        meta: { title: 'Dashboard', requiresAuth: true },
+        children: [
+            { path: '', name: 'Dashboard', component: DashboardHome },
+            { path: 'exams', name: 'DashboardExams', component: DashboardPlaceholder },
+            { path: 'students', name: 'DashboardStudents', component: DashboardPlaceholder },
+            { path: 'analytics', name: 'DashboardAnalytics', component: DashboardPlaceholder },
+            { path: 'profile', name: 'DashboardProfile', component: DashboardProfile },
+        ],
     }
 ];
 
 const router = createRouter({
     history: createWebHistory(),
     routes,
+});
+
+router.beforeEach(async (to) => {
+    if (!to.meta.requiresAuth) {
+        return true;
+    }
+
+    try {
+        const { data } = await axios.get('/auth/user');
+        if (data.user) {
+            return true;
+        }
+    } catch {
+        // fall through to redirect
+    }
+
+    return { name: 'Login' };
 });
 
 router.afterEach((to) => {

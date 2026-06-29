@@ -57,7 +57,7 @@ const onFormSubmit = async (e) => {
         });
 
         window.dispatchEvent(new CustomEvent('auth:changed', { detail: data.user }));
-        await router.push('/');
+        await router.push('/dashboard');
     } catch (error) {
         if (error.response?.status === 422) {
             serverErrors.value = error.response.data.errors || {};

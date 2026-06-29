@@ -114,7 +114,7 @@ const onFormSubmit = async (e) => {
     try {
         const { data } = await axios.post('/register', { ...initialValues });
         window.dispatchEvent(new CustomEvent('auth:changed', { detail: data.user }));
-        await router.push('/');
+        await router.push('/dashboard');
     } catch (error) {
         if (error.response?.status === 422) {
             serverErrors.value = error.response.data.errors || {};
@@ -197,8 +197,8 @@ const philippineCourses = [
             <div class="form-field">
                 <label class="form-label">I am a</label>
                 <div class="role-selector">
-                    <label 
-                        class="role-option" 
+                    <label
+                        class="role-option"
                         :class="{ active: initialValues.role === 'teacher' }"
                     >
                         <input
@@ -213,8 +213,8 @@ const philippineCourses = [
                             <span>Teacher</span>
                         </div>
                     </label>
-                    <label 
-                        class="role-option" 
+                    <label
+                        class="role-option"
                         :class="{ active: initialValues.role === 'student' }"
                     >
                         <input
@@ -533,8 +533,8 @@ const philippineCourses = [
         <div class="signin-wrapper">
             <p class="signin-prompt">
                 Already have an account?
-                <a 
-                    href="/login" 
+                <a
+                    href="/login"
                     class="signin-link"
                     @click.prevent="router.push('/login')"
                 >
