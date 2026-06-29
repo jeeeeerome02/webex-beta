@@ -16,9 +16,8 @@ const isLoggingOut = ref(false);
 
 const menu = [
     { label: 'Overview', icon: 'pi pi-th-large', to: '/dashboard' },
-    { label: 'Exams', icon: 'pi pi-file-edit', to: '/dashboard/exams' },
-    { label: 'Students', icon: 'pi pi-users', to: '/dashboard/students' },
-    { label: 'Analytics', icon: 'pi pi-chart-bar', to: '/dashboard/analytics' },
+    { label: 'Classes', icon: 'pi pi-book', to: '/dashboard/classes' },
+    { label: 'Chat', icon: 'pi pi-comments', to: '/dashboard/chat' },
     { label: 'Profile', icon: 'pi pi-user', to: '/dashboard/profile' },
 ];
 

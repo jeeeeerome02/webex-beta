@@ -8,6 +8,8 @@ import DashboardLayout from './components/layout/DashboardLayout.vue';
 import DashboardHome from './pages/dashboard/DashboardHome.vue';
 import DashboardProfile from './pages/dashboard/DashboardProfile.vue';
 import DashboardPlaceholder from './pages/dashboard/DashboardPlaceholder.vue';
+import DashboardClasses from './pages/dashboard/DashboardClasses.vue';
+import ClassInvite from './pages/ClassInvite.vue';
 
 const routes = [
     {
@@ -50,11 +52,16 @@ const routes = [
         meta: { title: 'Dashboard', requiresAuth: true },
         children: [
             { path: '', name: 'Dashboard', component: DashboardHome },
-            { path: 'exams', name: 'DashboardExams', component: DashboardPlaceholder },
-            { path: 'students', name: 'DashboardStudents', component: DashboardPlaceholder },
-            { path: 'analytics', name: 'DashboardAnalytics', component: DashboardPlaceholder },
+            { path: 'classes', name: 'DashboardClasses', component: DashboardClasses },
+            { path: 'chat', name: 'DashboardChat', component: DashboardPlaceholder },
             { path: 'profile', name: 'DashboardProfile', component: DashboardProfile },
         ],
+    },
+    {
+        path: '/class/:token',
+        name: 'ClassInvite',
+        component: ClassInvite,
+        meta: { title: 'Class Invite' },
     }
 ];
 
