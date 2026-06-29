@@ -5,35 +5,51 @@ import axios from 'axios';
 import Button from 'primevue/button';
 import Avatar from 'primevue/avatar';
 import Drawer from 'primevue/drawer';
+import Toast from 'primevue/toast';
+import { useToast } from 'primevue/usetoast';
 import AppLogo from './AppLogo.vue';
 
 const router = useRouter();
 const route = useRoute();
+const toast = useToast();
 
 const user = ref(null);
 const mobileOpen = ref(false);
 const isLoggingOut = ref(false);
+let pollTimer = null;
 
 const menu = [
     { label: 'Overview', icon: 'pi pi-th-large', to: '/dashboard' },
     { label: 'Classes', icon: 'pi pi-book', to: '/dashboard/classes', key: 'classes' },
+    { label: 'Search', icon: 'pi pi-search', to: '/dashboard/search' },
+    { label: 'Notifications', icon: 'pi pi-bell', to: '/dashboard/notifications', key: 'notifications' },
     { label: 'Chat', icon: 'pi pi-comments', to: '/dashboard/chat' },
     { label: 'Profile', icon: 'pi pi-user', to: '/dashboard/profile' },
 ];
 
-const notifications = ref({ classes: 0 });
+const notifications = ref({ classes: 0, notifications: 0 });
+let knownFriends = null;
 
 const loadNotifications = async () => {
     try {
         const { data } = await axios.get('/api/notifications');
         notifications.value = data;
+        const accepted = (data.items || []).filter((n) => n.type === 'friend').map((n) => n.id);
+        if (knownFriends !== null) {
+            accepted.filter((id) => !knownFriends.includes(id)).forEach((id) => {
+                const n = data.items.find((x) => x.id === id);
+                toast.add({ severity: 'success', summary: 'Friend request accepted', detail: n.text, life: 4000 });
+            });
+        }
+        knownFriends = accepted;
     } catch {
-        notifications.value = { classes: 0 };
+        notifications.value = { classes: 0, notifications: 0 };
     }
 };
 
 const pageTitle = computed(() => menu.find((m) => m.to === route.path)?.label || (route.name === 'DashboardClassDetail' ? 'Class' : 'Dashboard'));
 const showBack = computed(() => route.name === 'DashboardClassDetail');
+const decNotif = () => { if (notifications.value.notifications > 0) notifications.value.notifications -= 1; };
 const initials = computed(() =>
     (user.value?.name || 'U')
         .split(' ')
@@ -73,15 +89,24 @@ const loadUser = async () => {
 onMounted(() => {
     loadUser();
     loadNotifications();
+    pollTimer = setInterval(loadNotifications, 20000);
     window.addEventListener('auth:changed', (e) => (user.value = e.detail || null));
+    window.addEventListener('notif:read', decNotif);
+    window.addEventListener('notif:refresh', loadNotifications);
+    window.addEventListener('profile:updated', loadUser);
 });
 onUnmounted(() => {
+    clearInterval(pollTimer);
     window.removeEventListener('auth:changed', () => {});
+    window.removeEventListener('notif:read', decNotif);
+    window.removeEventListener('notif:refresh', loadNotifications);
+    window.removeEventListener('profile:updated', loadUser);
 });
 </script>
 
 <template>
     <div class="dash">
+        <Toast position="top-right" />
         <!-- Sidebar (desktop) -->
         <aside class="dash-sidebar">
             <div class="dash-brand">
@@ -154,7 +179,7 @@ onUnmounted(() => {
                 <div class="dash-topbar-right">
                     <span class="dash-user">
                         <span class="dash-user-name">{{ user?.name || 'Guest' }}</span>
-                        <Avatar :label="initials" shape="circle" />
+                        <Avatar :image="user?.avatar_url || undefined" :label="initials" shape="circle" />
                     </span>
                 </div>
             </header>

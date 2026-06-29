@@ -25,6 +25,10 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'role',
         'course',
+        'avatar_url',
+        'cover_url',
+        'notifications_read_at',
+        'read_notifications',
         'address_line',
         'barangay',
         'city_municipality',
@@ -53,6 +57,7 @@ class User extends Authenticatable implements JWTSubject
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'read_notifications' => 'array',
         ];
     }
 
@@ -96,5 +101,17 @@ class User extends Authenticatable implements JWTSubject
     public function awards(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Award::class, 'user_id');
+    }
+
+    public function friends(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'friendships', 'user_id', 'friend_id')
+            ->withPivot('status')
+            ->withTimestamps();
+    }
+
+    public function avatar(): string
+    {
+        return $this->avatar_url ?: 'https://api.dicebear.com/9.x/adventurer/svg?seed='.urlencode($this->name);
     }
 }

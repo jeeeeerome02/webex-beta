@@ -108,6 +108,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'role' => $user->role,
             'course' => $user->course,
+            'avatar_url' => $user->avatar(),
         ];
     }
 

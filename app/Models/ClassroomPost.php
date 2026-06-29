@@ -8,11 +8,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClassroomPost extends Model
 {
-    protected $fillable = ['classroom_id', 'user_id', 'body', 'comments_enabled', 'is_hidden'];
+    protected $fillable = ['classroom_id', 'user_id', 'body', 'comments_enabled', 'is_hidden', 'is_pinned'];
 
     protected $casts = [
         'comments_enabled' => 'boolean',
         'is_hidden' => 'boolean',
+        'is_pinned' => 'boolean',
     ];
 
     public function author(): BelongsTo

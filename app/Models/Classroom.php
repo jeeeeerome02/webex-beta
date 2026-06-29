@@ -57,4 +57,9 @@ class Classroom extends Model
     {
         return $this->hasMany(ClassroomPost::class);
     }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(ClassroomMessage::class);
+    }
 }

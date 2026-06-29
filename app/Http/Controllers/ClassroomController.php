@@ -87,13 +87,30 @@ class ClassroomController extends Controller
                 'role' => $m->role,
                 'status' => $m->pivot->status,
                 'is_co_teacher' => (bool) $m->pivot->is_co_teacher,
+                'is_self' => $m->id === $user->id,
+                'avatar_url' => $m->avatar(),
+                'friend_status' => \App\Http\Controllers\ProfileController::status($user->id, $m->id),
             ]);
+
+        $teacher = $classroom->teacher;
+        $members->prepend([
+            'id' => $teacher->id,
+            'name' => $teacher->name,
+            'email' => $teacher->email,
+            'role' => 'teacher',
+            'status' => 'approved',
+            'is_co_teacher' => false,
+            'is_owner' => true,
+            'is_self' => $teacher->id === $user->id,
+            'avatar_url' => $teacher->avatar(),
+            'friend_status' => \App\Http\Controllers\ProfileController::status($user->id, $teacher->id),
+        ]);
 
         return response()->json([
             'classroom' => array_merge($this->serialize($classroom, $isOwner), [
                 'teacher' => $classroom->teacher->name,
             ]),
-            'members' => $members,
+            'members' => $members->values(),
         ]);
     }
 
@@ -241,6 +258,13 @@ class ClassroomController extends Controller
             'icon' => $data['icon'] ?? 'pi pi-star',
         ]);
 
+        $recipient = User::find($userId);
+        $icon = $data['icon'] ?? 'pi pi-star';
+        $classroom->posts()->create([
+            'user_id' => $user->id,
+            'body' => '<p><i class="'.e($icon).'"></i> <strong>'.e($recipient?->name).'</strong> received the <strong>'.e($data['label']).'</strong> award!</p>',
+        ]);
+
         return response()->json(['message' => 'Award given.']);
     }
 
@@ -289,6 +313,11 @@ class ClassroomController extends Controller
     {
         $u = User::with('awards.classroom')->findOrFail($id);
 
+        $auth = Auth::guard('api')->user();
+        if ($auth && $auth->id === $u->id) {
+            $u->awards()->whereNull('seen_at')->update(['seen_at' => now()]);
+        }
+
         return response()->json([
             'user' => [
                 'id' => $u->id,
@@ -310,6 +339,7 @@ class ClassroomController extends Controller
     public function notifications(): JsonResponse
     {
         $user = Auth::guard('api')->user();
+        $readAt = $user->notifications_read_at;
 
         $pending = $user->ownedClassrooms()
             ->whereNull('archived_at')
@@ -317,9 +347,92 @@ class ClassroomController extends Controller
             ->get()
             ->sum('pending_count');
 
-        $awards = $user->awards()->count();
+        $awards = $user->awards()->with('classroom')->latest()->take(20)->get()
+            ->map(fn ($a) => [
+                'id' => 'a'.$a->id,
+                'type' => 'award',
+                'icon' => $a->icon,
+                'text' => 'You earned the '.$a->label.' award',
+                'class' => $a->classroom?->name,
+                'to' => $a->classroom ? '/dashboard/classes/'.$a->classroom->invite_token : '/dashboard/profile',
+                'date' => $a->created_at->diffForHumans(),
+                'unread' => ! $readAt || $a->created_at->gt($readAt),
+            ]);
 
-        return response()->json(['classes' => (int) $pending, 'awards' => (int) $awards]);
+        $friends = $user->friends()->wherePivot('status', 'accepted')->get()
+            ->map(fn ($f) => [
+                'id' => 'f'.$f->id,
+                'type' => 'friend',
+                'icon' => 'pi pi-check-circle',
+                'text' => $f->name.' is now your friend',
+                'class' => null,
+                'to' => '/dashboard/users/'.$f->id,
+                'date' => $f->pivot->created_at->diffForHumans(),
+                'unread' => ! $readAt || $f->pivot->created_at > $readAt,
+            ]);
+
+        $requests = \App\Models\Friendship::where('friend_id', $user->id)->where('status', 'pending')->with('requester')->latest()->get()
+            ->map(fn ($r) => [
+                'id' => 'r'.$r->id,
+                'type' => 'request',
+                'icon' => 'pi pi-user-plus',
+                'text' => ($r->requester?->name ?? 'Someone').' sent you a friend request',
+                'class' => null,
+                'to' => '/dashboard/users/'.$r->user_id,
+                'user_id' => $r->user_id,
+                'date' => $r->created_at->diffForHumans(),
+                'unread' => true,
+            ]);
+
+        $groups = $user->ownedClassrooms()->whereNull('archived_at')->withCount(['members as pending_count' => fn ($q) => $q->where('status', 'pending')])->get()
+            ->filter(fn ($c) => $c->pending_count > 0)
+            ->map(fn ($c) => [
+                'id' => 'g'.$c->id,
+                'type' => 'group',
+                'icon' => 'pi pi-users',
+                'text' => $c->pending_count.' pending request(s) in '.$c->name,
+                'class' => $c->name,
+                'to' => '/dashboard/classes/'.$c->invite_token,
+                'date' => 'pending',
+                'unread' => true,
+            ]);
+
+        $items = $requests->concat($awards)->concat($friends)->concat($groups)->values();
+
+        $read = $user->read_notifications ?? [];
+        $items = $items->map(function ($n) use ($read) {
+            $n['unread'] = $n['unread'] && ! in_array($n['id'], $read, true);
+
+            return $n;
+        });
+        $unread = $items->where('unread', true)->count();
+
+        return response()->json([
+            'classes' => (int) $pending,
+            'notifications' => (int) $unread,
+            'items' => $items->values(),
+        ]);
+    }
+
+    public function readNotification(Request $request): JsonResponse
+    {
+        $user = Auth::guard('api')->user();
+        $id = (string) $request->input('id');
+        $read = $user->read_notifications ?? [];
+        if (! in_array($id, $read, true)) {
+            $read[] = $id;
+            $user->update(['read_notifications' => $read]);
+        }
+
+        return response()->json(['message' => 'ok']);
+    }
+
+    public function clearNotifications(): JsonResponse
+    {
+        $user = Auth::guard('api')->user();
+        $user->update(['notifications_read_at' => now()]);
+
+        return response()->json(['message' => 'Notifications cleared.']);
     }
 
     private function serialize(Classroom $c, bool $owner): array
