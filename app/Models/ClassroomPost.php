@@ -8,9 +8,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClassroomPost extends Model
 {
-    protected $fillable = ['classroom_id', 'user_id', 'body', 'kind', 'comments_enabled', 'is_hidden', 'is_pinned'];
+    protected $fillable = ['classroom_id', 'user_id', 'body', 'kind', 'visible_to', 'comments_enabled', 'is_hidden', 'is_pinned'];
 
     protected $casts = [
+        'visible_to' => 'array',
         'comments_enabled' => 'boolean',
         'is_hidden' => 'boolean',
         'is_pinned' => 'boolean',

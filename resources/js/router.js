@@ -10,6 +10,7 @@ import DashboardProfile from './pages/dashboard/DashboardProfile.vue';
 import DashboardPlaceholder from './pages/dashboard/DashboardPlaceholder.vue';
 import DashboardClasses from './pages/dashboard/DashboardClasses.vue';
 import DashboardClassDetail from './pages/dashboard/DashboardClassDetail.vue';
+import DashboardTaskExam from './pages/dashboard/DashboardTaskExam.vue';
 import DashboardUserProfile from './pages/dashboard/DashboardUserProfile.vue';
 import DashboardNotifications from './pages/dashboard/DashboardNotifications.vue';
 import DashboardSearch from './pages/dashboard/DashboardSearch.vue';
@@ -59,6 +60,7 @@ const routes = [
             { path: '', name: 'Dashboard', component: DashboardHome },
             { path: 'classes', name: 'DashboardClasses', component: DashboardClasses },
             { path: 'classes/:id', name: 'DashboardClassDetail', component: DashboardClassDetail },
+            { path: 'classes/:id/task/:taskId', name: 'DashboardTaskExam', component: DashboardTaskExam },
             { path: 'users/:id', name: 'DashboardUserProfile', component: DashboardUserProfile },
             { path: 'chat', name: 'DashboardChat', component: DashboardChat },
             { path: 'notifications', name: 'DashboardNotifications', component: DashboardNotifications },

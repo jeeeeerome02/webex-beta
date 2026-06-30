@@ -62,6 +62,7 @@ Route::middleware('jwt.cookie')->group(function () {
     Route::post('/api/classrooms/{token}/tasks', [ClassroomTaskController::class, 'store']);
     Route::post('/api/classrooms/{token}/tasks/{id}/archive', [ClassroomTaskController::class, 'archive']);
     Route::delete('/api/classrooms/{token}/tasks/{id}', [ClassroomTaskController::class, 'destroy']);
+    Route::get('/api/classrooms/{token}/tasks/{id}/take', [ClassroomTaskController::class, 'show']);
     Route::get('/api/classrooms/{token}/tasks/{id}/submission', [ClassroomTaskController::class, 'mySubmission']);
     Route::post('/api/classrooms/{token}/tasks/{id}/submission', [ClassroomTaskController::class, 'saveSubmission']);
     Route::post('/api/classrooms/{token}/tasks/{id}/submit', [ClassroomTaskController::class, 'submitSubmission']);

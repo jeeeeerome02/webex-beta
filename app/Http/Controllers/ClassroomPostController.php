@@ -73,6 +73,9 @@ class ClassroomPostController extends Controller
     {
         [$user, $classroom, $isOwner] = $this->authorize($token);
 
+        $isCoTeacher = $classroom->members()->where('user_id', $user->id)->wherePivot('is_co_teacher', true)->exists();
+        $canManage = $isOwner || $isCoTeacher;
+
         $posts = $classroom->posts()
             ->with(['author', 'comments.author', 'comments.likes', 'comments.replies.author', 'comments.replies.likes', 'likes'])
             ->withCount('likes')
@@ -80,6 +83,7 @@ class ClassroomPostController extends Controller
             ->latest()
             ->get()
             ->filter(fn ($p) => ! $p->is_hidden || $isOwner || $p->user_id === $user->id)
+            ->filter(fn ($p) => $canManage || $p->user_id === $user->id || empty($p->visible_to) || in_array($user->id, $p->visible_to, true))
             ->map(fn ($p) => $this->serialize($p, $user->id, $isOwner))
             ->values();
 

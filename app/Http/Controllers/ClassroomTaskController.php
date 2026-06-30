@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Classroom;
 use App\Models\ClassroomTask;
 use App\Models\ClassroomTaskSubmission;
+use App\Models\UserNotification;
+use App\Services\ExamAi;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -66,6 +68,9 @@ class ClassroomTaskController extends Controller
             'questions.*.name' => ['required_with:questions', 'string', 'max:2000'],
             'questions.*.type' => ['required_with:questions', 'string', 'max:40'],
             'questions.*.options' => ['nullable', 'array'],
+            'questions.*.answer' => ['nullable', 'string', 'max:5000'],
+            'questions.*.language' => ['nullable', 'string', 'max:40'],
+            'questions.*.starter' => ['nullable', 'string', 'max:20000'],
         ]);
 
         [$deadlineAt, $deadlineEnd] = $this->resolveDeadline($data);
@@ -89,14 +94,47 @@ class ClassroomTaskController extends Controller
         $icons = ['quiz' => 'pi pi-question-circle', 'activity' => 'pi pi-pencil', 'study' => 'pi pi-book', 'exam' => 'pi pi-file-edit'];
         $icon = $icons[$task->type] ?? 'pi pi-check-square';
         $due = $task->deadline_at ? ' · due '.$task->deadline_at->format('M j, Y') : '';
+        $audience = $task->visibility === 'specific' ? ' for selected members' : ' for everyone';
         $classroom->posts()->create([
             'user_id' => $user->id,
             'kind' => 'task',
-            'body' => '<p><i class="'.$icon.'"></i> <strong>New '.e(ucfirst($task->type)).': '.e($task->name).'</strong>'.e($due).'</p>'.
+            'visible_to' => $task->visibility === 'specific' ? ($task->visible_members ?? []) : null,
+            'body' => '<p><i class="'.$icon.'"></i> <strong>'.e($user->name).'</strong> posted a new '.e(ucfirst($task->type)).$audience.': <strong>'.e($task->name).'</strong>'.e($due).'</p>'.
                 ($task->description ? '<p>'.nl2br(e($task->description)).'</p>' : ''),
         ]);
 
+        $this->notifyAudience($classroom, $task, $user, $token);
+
         return response()->json(['task' => $this->serialize($task->load('author'))], 201);
+    }
+
+    private function notifyAudience(Classroom $classroom, ClassroomTask $task, $actor, string $token): void
+    {
+        $approved = $classroom->members()->wherePivot('status', 'approved')->pluck('users.id');
+        if ($task->visibility === 'specific') {
+            $approved = $approved->intersect(collect($task->visible_members ?? []));
+        }
+        $recipients = $approved->push($classroom->teacher_id)->unique()
+            ->reject(fn ($id) => $id === $actor->id)->values();
+
+        $now = now();
+        $label = ucfirst($task->type);
+        $rows = $recipients->map(fn ($id) => [
+            'user_id' => $id,
+            'actor_id' => $actor->id,
+            'type' => 'task',
+            'icon' => 'pi pi-check-square',
+            'text' => $actor->name.' assigned a new '.$label.': '.$task->name,
+            'link' => '/dashboard/classes/'.$token,
+            'class_name' => $classroom->name,
+            'read' => false,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->all();
+
+        if ($rows) {
+            UserNotification::insert($rows);
+        }
     }
 
     public function archive(string $token, int $id): JsonResponse
@@ -149,10 +187,14 @@ class ClassroomTaskController extends Controller
     {
         $questions = $t->questions ?? [];
         if (! $canManage) {
-            // Hide the correct-answer flags from students.
+            // Hide correct answers from students.
             $questions = array_map(function ($q) {
                 if (! empty($q['options']) && is_array($q['options'])) {
                     $q['options'] = array_map(fn ($o) => ['text' => $o['text'] ?? ''], $q['options']);
+                }
+                unset($q['answer']); // identification / essay model answer
+                if (($q['type'] ?? '') !== 'code') {
+                    unset($q['starter']);
                 }
 
                 return $q;
@@ -189,7 +231,7 @@ class ClassroomTaskController extends Controller
 
     private function objectiveTotal(ClassroomTask $t): int
     {
-        return collect($t->questions ?? [])->filter(fn ($q) => in_array($q['type'] ?? '', ['radio', 'checkbox'], true))->count();
+        return collect($t->questions ?? [])->filter(fn ($q) => in_array($q['type'] ?? '', ['radio', 'checkbox', 'identification'], true))->count();
     }
 
     private function deadlineLabel(ClassroomTask $t): string
@@ -220,6 +262,35 @@ class ClassroomTaskController extends Controller
         return [$user, $classroom, $task];
     }
 
+    public function show(string $token, int $id): JsonResponse
+    {
+        [$user, , $task] = $this->authorizeStudent($token, $id);
+
+        $sub = ClassroomTaskSubmission::where('task_id', $task->id)->where('user_id', $user->id)->first();
+        $count = count($task->questions ?? []);
+
+        $order = $sub?->order;
+        if (! $order || count($order) !== $count) {
+            $order = $count ? range(0, $count - 1) : [];
+            if ($count && ! empty($task->advanced['randomize'])) {
+                shuffle($order);
+            }
+        }
+
+        $solution = null;
+        if ($sub && $sub->status === 'submitted' && ! empty($task->advanced['show_answers'])) {
+            $solution = $this->solution($task);
+        }
+
+        return response()->json([
+            'task' => $this->serialize($task, $user->id, false),
+            'submission' => $sub ? $this->serializeSubmission($sub, $task) : null,
+            'order' => $order,
+            'show_answers' => (bool) ($task->advanced['show_answers'] ?? false),
+            'solution' => $solution,
+        ]);
+    }
+
     public function mySubmission(string $token, int $id): JsonResponse
     {
         [$user, , $task] = $this->authorizeStudent($token, $id);
@@ -236,6 +307,7 @@ class ClassroomTaskController extends Controller
         $data = $request->validate([
             'answers' => ['nullable', 'array'],
             'logs' => ['nullable', 'array'],
+            'order' => ['nullable', 'array'],
         ]);
 
         $sub = ClassroomTaskSubmission::firstOrNew([
@@ -249,6 +321,9 @@ class ClassroomTaskController extends Controller
 
         $sub->answers = $data['answers'] ?? $sub->answers ?? [];
         $sub->logs = $data['logs'] ?? $sub->logs ?? [];
+        if (isset($data['order'])) {
+            $sub->order = $data['order'];
+        }
         $sub->status = 'in_progress';
         $sub->started_at = $sub->started_at ?? now();
         $sub->save();
@@ -256,13 +331,14 @@ class ClassroomTaskController extends Controller
         return response()->json(['saved' => true]);
     }
 
-    public function submitSubmission(Request $request, string $token, int $id): JsonResponse
+    public function submitSubmission(Request $request, ExamAi $ai, string $token, int $id): JsonResponse
     {
         [$user, , $task] = $this->authorizeStudent($token, $id);
 
         $data = $request->validate([
             'answers' => ['nullable', 'array'],
             'logs' => ['nullable', 'array'],
+            'order' => ['nullable', 'array'],
         ]);
 
         $sub = ClassroomTaskSubmission::firstOrNew([
@@ -275,30 +351,46 @@ class ClassroomTaskController extends Controller
         }
 
         $answers = $data['answers'] ?? $sub->answers ?? [];
-        [$correct] = $this->grade($task, $answers);
+        [$correct, , $detail] = $this->grade($task, $answers, $ai);
+        $aiData = $this->scoreEssays($task, $answers, $ai);
 
         $sub->answers = $answers;
         $sub->logs = $data['logs'] ?? $sub->logs ?? [];
+        if (isset($data['order'])) {
+            $sub->order = $data['order'];
+        }
+        $sub->ai = ['detail' => $detail, 'essays' => $aiData];
         $sub->status = 'submitted';
         $sub->score = $correct;
         $sub->started_at = $sub->started_at ?? now();
         $sub->submitted_at = now();
         $sub->save();
 
-        return response()->json(['submission' => $this->serializeSubmission($sub, $task)]);
+        return response()->json([
+            'submission' => $this->serializeSubmission($sub, $task),
+            'solution' => ! empty($task->advanced['show_answers']) ? $this->solution($task) : null,
+        ]);
     }
 
-    public function submissions(string $token, int $id): JsonResponse
+    public function submissions(string $token, int $id, ExamAi $ai): JsonResponse
     {
         [, $classroom, $canManage] = $this->authorizeTeacher($token);
         abort_unless($canManage, 403);
 
         $task = $classroom->tasks()->findOrFail($id);
-        $subs = ClassroomTaskSubmission::with('student')
+        $rows = ClassroomTaskSubmission::with('student')
             ->where('task_id', $task->id)
             ->latest('updated_at')
-            ->get()
-            ->map(fn ($s) => $this->serializeSubmission($s, $task, true));
+            ->get();
+
+        $flags = $this->similarityFlags($task, $rows, $ai);
+
+        $subs = $rows->map(function ($s) use ($task, $flags) {
+            $out = $this->serializeSubmission($s, $task, true);
+            $out['flags'] = $flags[$s->id] ?? [];
+
+            return $out;
+        });
 
         return response()->json([
             'task' => $this->serialize($task, null, true),
@@ -306,35 +398,118 @@ class ClassroomTaskController extends Controller
         ]);
     }
 
-    private function grade(ClassroomTask $task, array $answers): array
+    /** Cross-student similarity detection for free-text questions. */
+    private function similarityFlags(ClassroomTask $task, $rows, ExamAi $ai): array
     {
-        $correct = 0;
-        $total = 0;
-        foreach (($task->questions ?? []) as $i => $q) {
-            $type = $q['type'] ?? '';
-            if (! in_array($type, ['radio', 'checkbox'], true)) {
+        $threshold = 80;
+        $textTypes = ['essay', 'identification', 'code'];
+        $flags = [];
+        $list = $rows->values();
+
+        foreach (($task->questions ?? []) as $qi => $q) {
+            if (! in_array($q['type'] ?? '', $textTypes, true)) {
                 continue;
             }
-            $total++;
-            $correctSet = collect($q['options'] ?? [])->filter(fn ($o) => ! empty($o['correct']))->map(fn ($o) => $o['text'] ?? '')->values()->all();
-            $ans = $answers[$i] ?? ($answers[(string) $i] ?? null);
-
-            if ($type === 'radio') {
-                if (is_string($ans) && count($correctSet) === 1 && $ans === $correctSet[0]) {
-                    $correct++;
-                }
-            } else {
-                $given = is_array($ans) ? $ans : [];
-                sort($given);
-                $want = $correctSet;
-                sort($want);
-                if (! empty($want) && $given === $want) {
-                    $correct++;
+            for ($a = 0; $a < $list->count(); $a++) {
+                for ($b = $a + 1; $b < $list->count(); $b++) {
+                    $subA = $list[$a];
+                    $subB = $list[$b];
+                    $ansA = (string) ($subA->answers[$qi] ?? $subA->answers[(string) $qi] ?? '');
+                    $ansB = (string) ($subB->answers[$qi] ?? $subB->answers[(string) $qi] ?? '');
+                    if (trim($ansA) === '' || trim($ansB) === '') {
+                        continue;
+                    }
+                    $sim = $ai->similarity($ansA, $ansB);
+                    if ($sim >= $threshold) {
+                        $flags[$subA->id][] = ['q' => $qi, 'with' => $subB->student?->name ?? 'Unknown', 'percent' => $sim];
+                        $flags[$subB->id][] = ['q' => $qi, 'with' => $subA->student?->name ?? 'Unknown', 'percent' => $sim];
+                    }
                 }
             }
         }
 
-        return [$correct, $total];
+        return $flags;
+    }
+
+    private function scoreEssays(ClassroomTask $task, array $answers, ExamAi $ai): array
+    {
+        $out = [];
+        foreach (($task->questions ?? []) as $i => $q) {
+            if (($q['type'] ?? '') !== 'essay') {
+                continue;
+            }
+            $ans = (string) ($answers[$i] ?? $answers[(string) $i] ?? '');
+            $out[$i] = $ai->scoreEssay($ans, $q['answer'] ?? null, []);
+        }
+
+        return $out;
+    }
+
+    private function solution(ClassroomTask $task): array
+    {
+        $sol = [];
+        foreach (($task->questions ?? []) as $i => $q) {
+            $type = $q['type'] ?? '';
+            if (in_array($type, ['radio', 'checkbox'], true)) {
+                $sol[$i] = collect($q['options'] ?? [])->filter(fn ($o) => ! empty($o['correct']))->map(fn ($o) => $o['text'] ?? '')->values()->all();
+            } elseif ($type === 'identification') {
+                $sol[$i] = $q['answer'] ?? '';
+            }
+        }
+
+        return $sol;
+    }
+
+    private function grade(ClassroomTask $task, array $answers, ?ExamAi $ai = null): array
+    {
+        $correct = 0;
+        $total = 0;
+        $detail = [];
+        foreach (($task->questions ?? []) as $i => $q) {
+            $type = $q['type'] ?? '';
+            $ans = $answers[$i] ?? ($answers[(string) $i] ?? null);
+
+            if ($type === 'radio') {
+                $total++;
+                $correctSet = $this->correctOptions($q);
+                $ok = is_string($ans) && count($correctSet) === 1 && $ans === $correctSet[0];
+                $detail[$i] = $ok;
+                $correct += $ok ? 1 : 0;
+            } elseif ($type === 'checkbox') {
+                $total++;
+                $correctSet = $this->correctOptions($q);
+                $given = is_array($ans) ? $ans : [];
+                sort($given);
+                $want = $correctSet;
+                sort($want);
+                $ok = ! empty($want) && $given === $want;
+                $detail[$i] = $ok;
+                $correct += $ok ? 1 : 0;
+            } elseif ($type === 'identification') {
+                $total++;
+                $expected = trim((string) ($q['answer'] ?? ''));
+                $given = trim((string) ($ans ?? ''));
+                $ok = false;
+                if ($expected !== '' && $given !== '') {
+                    $sim = $ai ? $ai->similarity($given, $expected) : ($this->loose($given) === $this->loose($expected) ? 100 : 0);
+                    $ok = $sim >= 90;
+                }
+                $detail[$i] = $ok;
+                $correct += $ok ? 1 : 0;
+            }
+        }
+
+        return [$correct, $total, $detail];
+    }
+
+    private function correctOptions(array $q): array
+    {
+        return collect($q['options'] ?? [])->filter(fn ($o) => ! empty($o['correct']))->map(fn ($o) => $o['text'] ?? '')->values()->all();
+    }
+
+    private function loose(string $s): string
+    {
+        return preg_replace('/[^a-z0-9]/', '', strtolower($s)) ?? $s;
     }
 
     private function serializeSubmission(ClassroomTaskSubmission $s, ClassroomTask $task, bool $withStudent = false): array
@@ -343,6 +518,7 @@ class ClassroomTaskController extends Controller
             'id' => $s->id,
             'answers' => $s->answers ?? [],
             'logs' => $s->logs ?? [],
+            'ai' => $s->ai ?? null,
             'status' => $s->status,
             'score' => $s->score,
             'objective_total' => $this->objectiveTotal($task),

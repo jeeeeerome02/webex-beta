@@ -12,6 +12,8 @@ class ClassroomTaskSubmission extends Model
         'user_id',
         'answers',
         'logs',
+        'ai',
+        'order',
         'status',
         'score',
         'started_at',
@@ -21,6 +23,8 @@ class ClassroomTaskSubmission extends Model
     protected $casts = [
         'answers' => 'array',
         'logs' => 'array',
+        'ai' => 'array',
+        'order' => 'array',
         'started_at' => 'datetime',
         'submitted_at' => 'datetime',
     ];

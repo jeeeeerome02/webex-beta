@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'exam_ai' => [
+        'url' => env('AI_API_URL'),   // e.g. https://openrouter.ai/api/v1
+        'key' => env('AI_API_KEY'),   // free OpenRouter / OpenAI-compatible key
+        'model' => env('AI_API_MODEL', 'meta-llama/llama-3.1-8b-instruct:free'),
+    ],
+
 ];

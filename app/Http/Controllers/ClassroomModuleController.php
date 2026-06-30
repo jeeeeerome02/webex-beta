@@ -74,7 +74,7 @@ class ClassroomModuleController extends Controller
         $classroom->posts()->create([
             'user_id' => $user->id,
             'kind' => 'module',
-            'body' => '<p><i class="pi pi-folder-open"></i> <strong>New module</strong></p>'.
+            'body' => '<p><i class="pi pi-folder-open"></i> <strong>'.e($user->name).'</strong> posted a new module</p>'.
                 '<p>'.nl2br(e($module->description)).'</p>'.$fileLinks,
         ]);
 

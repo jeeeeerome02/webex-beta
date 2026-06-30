@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';import { useRoute, useRouter } from 'vue-router';
+import { computed, nextTick, onMounted, ref } from 'vue';import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import Tabs from 'primevue/tabs';
 import TabList from 'primevue/tablist';
@@ -447,7 +447,7 @@ const showTask = ref(false);
 const savingTask = ref(false);
 const taskStep = ref(1); // 1 = details, 2 = questions
 const taskTab = ref('basic'); // basic | advanced
-const blankAdvanced = () => ({ ai_check: false, allow_mobile: false, fullscreen: false, fs_exit: false, fs_shortcuts: false, camera: false });
+const blankAdvanced = () => ({ ai_check: false, allow_mobile: false, fullscreen: false, fs_exit: false, fs_shortcuts: false, camera: false, randomize: false, show_answers: false });
 const blankTask = () => ({
     name: '', type: 'activity', description: '',
     deadline_type: 'none', deadline_at: null, deadline_end: null,
@@ -491,6 +491,45 @@ const questionTypeOptions = [
     { label: 'Identification', value: 'identification' },
     { label: 'Code', value: 'code' },
 ];
+const codeLanguageOptions = [
+    { label: 'PHP', value: 'php' },
+    { label: 'Python', value: 'python' },
+    { label: 'JavaScript', value: 'javascript' },
+    { label: 'TypeScript', value: 'typescript' },
+    { label: 'Java', value: 'java' },
+    { label: 'C', value: 'c' },
+    { label: 'C++', value: 'cpp' },
+    { label: 'C#', value: 'csharp' },
+    { label: 'HTML', value: 'html' },
+    { label: 'CSS', value: 'css' },
+    { label: 'SQL', value: 'sql' },
+    { label: 'Ruby', value: 'ruby' },
+    { label: 'Go', value: 'go' },
+    { label: 'Kotlin', value: 'kotlin' },
+    { label: 'Swift', value: 'swift' },
+    { label: 'Plain text', value: 'plaintext' },
+];
+const codeTemplates = {
+    php: "<?php\n\nclass Solution\n{\n    public function solve()\n    {\n        // Your code here\n    }\n}\n",
+    python: "class Solution:\n    def solve(self):\n        # Your code here\n        pass\n",
+    javascript: "class Solution {\n  solve() {\n    // Your code here\n  }\n}\n",
+    typescript: "class Solution {\n  solve(): void {\n    // Your code here\n  }\n}\n",
+    java: "public class Solution {\n    public static void main(String[] args) {\n        // Your code here\n    }\n}\n",
+    c: "#include <stdio.h>\n\nint main(void) {\n    // Your code here\n    return 0;\n}\n",
+    cpp: "#include <iostream>\nusing namespace std;\n\nint main() {\n    // Your code here\n    return 0;\n}\n",
+    csharp: "using System;\n\nclass Solution {\n    static void Main() {\n        // Your code here\n    }\n}\n",
+    html: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <title>Document</title>\n</head>\n<body>\n    <!-- Your code here -->\n</body>\n</html>\n",
+    css: "/* Your styles here */\nbody {\n}\n",
+    sql: "-- Your query here\nSELECT * FROM table_name;\n",
+    ruby: "class Solution\n  def solve\n    # Your code here\n  end\nend\n",
+    go: "package main\n\nimport \"fmt\"\n\nfunc main() {\n    // Your code here\n}\n",
+    kotlin: "fun main() {\n    // Your code here\n}\n",
+    swift: "import Foundation\n\nfunc solve() {\n    // Your code here\n}\n",
+    plaintext: '',
+};
+const applyStarter = (q) => {
+    if (!q.starter || !q.starter.trim()) q.starter = codeTemplates[q.language] || '';
+};
 const memberOptions = computed(() => approvedMembers.value.filter((m) => !m.is_owner).map((m) => ({ label: m.name, value: m.id })));
 const isExam = computed(() => taskForm.value.type === 'exam');
 
@@ -555,127 +594,8 @@ const taskTypeMeta = {
     exam: { icon: 'pi pi-file-edit', color: '#ef4444' },
 };
 
-// ---- Exam taking (student) ----
-const showExam = ref(false);
-const examTask = ref(null);
-const examAnswers = ref({});
-const examLogs = ref([]);
-const examSubmitted = ref(false);
-const examSubmitting = ref(false);
-let proctorAttached = false;
-let saveTimer = null;
-
-const pushLog = (type, detail) => { examLogs.value.push({ type, detail, at: new Date().toISOString() }); };
-
-const autosave = () => {
-    if (!examTask.value || examSubmitted.value) return;
-    clearTimeout(saveTimer);
-    const taskId = examTask.value.id;
-    saveTimer = setTimeout(() => {
-        axios.post(`/api/classrooms/${token}/tasks/${taskId}/submission`, { answers: examAnswers.value, logs: examLogs.value }).catch(() => {});
-    }, 700);
-};
-
-const onFsChange = () => {
-    if (!document.fullscreenElement && examTask.value?.advanced?.fullscreen && examTask.value?.advanced?.fs_exit && !examSubmitted.value) {
-        pushLog('exit_fullscreen', 'Exited fullscreen');
-        autosave();
-    }
-};
-const onKeydown = (e) => {
-    if (!examTask.value?.advanced?.fs_shortcuts || examSubmitted.value) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) {
-        const combo = `${e.ctrlKey ? 'Ctrl+' : ''}${e.metaKey ? 'Meta+' : ''}${e.altKey ? 'Alt+' : ''}${e.key}`;
-        pushLog('shortcut', combo);
-        autosave();
-    }
-};
-const onVisibility = () => {
-    if (document.hidden && examTask.value && !examSubmitted.value) {
-        pushLog('tab_switch', 'Left the exam tab');
-        autosave();
-    }
-};
-const onBeforeUnload = () => {
-    if (showExam.value && examTask.value && !examSubmitted.value) {
-        localStorage.setItem(`exam_ref_${examTask.value.id}`, '1');
-    }
-};
-
-const attachProctor = () => {
-    if (proctorAttached) return;
-    document.addEventListener('fullscreenchange', onFsChange);
-    document.addEventListener('keydown', onKeydown);
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('beforeunload', onBeforeUnload);
-    proctorAttached = true;
-};
-const detachProctor = () => {
-    document.removeEventListener('fullscreenchange', onFsChange);
-    document.removeEventListener('keydown', onKeydown);
-    document.removeEventListener('visibilitychange', onVisibility);
-    window.removeEventListener('beforeunload', onBeforeUnload);
-    proctorAttached = false;
-};
-const enterFullscreen = () => { document.documentElement.requestFullscreen?.().catch(() => {}); };
-const exitFullscreen = () => { if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); };
-
-const openExam = async (t) => {
-    examTask.value = t;
-    examAnswers.value = {};
-    examLogs.value = [];
-    examSubmitted.value = false;
-    (t.questions || []).forEach((q, i) => { examAnswers.value[i] = q.type === 'checkbox' ? [] : ''; });
-
-    try {
-        const { data } = await axios.get(`/api/classrooms/${token}/tasks/${t.id}/submission`);
-        if (data.submission) {
-            examAnswers.value = { ...examAnswers.value, ...(data.submission.answers || {}) };
-            examLogs.value = data.submission.logs || [];
-            examSubmitted.value = data.submission.status === 'submitted';
-        }
-    } catch { /* no prior submission */ }
-
-    if (localStorage.getItem(`exam_ref_${t.id}`)) {
-        pushLog('page_refreshed', 'Exam page was refreshed');
-        localStorage.removeItem(`exam_ref_${t.id}`);
-    }
-
-    showExam.value = true;
-    await nextTick();
-    if (!examSubmitted.value) {
-        attachProctor();
-        autosave();
-        if (t.advanced?.fullscreen) enterFullscreen();
-    }
-};
-
-const submitExam = async () => {
-    if (examSubmitting.value) return;
-    if (!confirm('Submit your answers? You will not be able to change them afterwards.')) return;
-    examSubmitting.value = true;
-    try {
-        const { data } = await axios.post(`/api/classrooms/${token}/tasks/${examTask.value.id}/submit`, { answers: examAnswers.value, logs: examLogs.value });
-        examSubmitted.value = true;
-        if (examTask.value) examTask.value.my_status = 'submitted';
-        await loadTasks();
-        closeExam();
-        if (data.submission && data.submission.objective_total) {
-            alert(`Submitted! Auto-graded objective score: ${data.submission.score}/${data.submission.objective_total}`);
-        }
-    } catch (e) {
-        alert(e.response?.data?.message || 'Could not submit.');
-    } finally { examSubmitting.value = false; }
-};
-
-const closeExam = () => {
-    clearTimeout(saveTimer);
-    detachProctor();
-    exitFullscreen();
-    showExam.value = false;
-};
-
-watch(examAnswers, () => autosave(), { deep: true });
+// ---- Exam taking (student) → dedicated page ----
+const openExam = (t) => { router.push(`/dashboard/classes/${token}/task/${t.id}`); };
 
 // ---- Submissions (teacher) ----
 const showSubs = ref(false);
@@ -705,7 +625,6 @@ const fmtTime = (iso) => { try { return new Date(iso).toLocaleTimeString(); } ca
 const answerText = (a) => Array.isArray(a) ? (a.length ? a.join(', ') : '—') : (a || '—');
 
 onMounted(load);
-onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
 </script>
 
 <template>
@@ -906,7 +825,11 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                                     <div class="task-cta">
                                         <Button v-if="canManageTasks" label="Submissions" icon="pi pi-list-check" size="small" outlined @click="openSubs(t)" />
                                         <template v-else>
-                                            <Tag v-if="t.my_status === 'submitted'" value="Submitted" icon="pi pi-check" severity="success" />
+                                            <template v-if="t.my_status === 'submitted'">
+                                                <Tag value="Submitted" icon="pi pi-check" severity="success" />
+                                                <Tag v-if="t.objective_total" :value="`Score ${t.my_score ?? 0}/${t.objective_total}`" icon="pi pi-star" severity="info" />
+                                                <Button label="View result" icon="pi pi-eye" size="small" text @click="openExam(t)" />
+                                            </template>
                                             <Button v-else :label="t.questions_count ? 'Answer' : 'Open'" icon="pi pi-pencil" size="small" @click="openExam(t)" />
                                         </template>
                                     </div>
@@ -1073,6 +996,8 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                             <div class="toggle-row sub"><span>Check for keyboard shortcuts</span><ToggleSwitch v-model="taskForm.advanced.fs_shortcuts" /></div>
                         </template>
                         <div class="toggle-row"><span>Exam with camera open</span><ToggleSwitch v-model="taskForm.advanced.camera" /></div>
+                        <div class="toggle-row"><span>Randomize question order<small>Each student gets questions in a different order.</small></span><ToggleSwitch v-model="taskForm.advanced.randomize" /></div>
+                        <div class="toggle-row"><span>Show answers after submitting<small>Reveals correct answers and AI feedback once submitted.</small></span><ToggleSwitch v-model="taskForm.advanced.show_answers" /></div>
                     </div>
                 </template>
 
@@ -1094,7 +1019,21 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                                 </div>
                                 <Button label="Add option" icon="pi pi-plus" text size="small" @click="addOption(q)" />
                             </div>
-                            <p v-else class="q-hint">{{ q.type === 'code' ? 'Students will submit code.' : 'Students will type a free-text answer.' }}</p>
+                            <div v-else-if="q.type === 'identification'" class="q-extra">
+                                <label class="q-extra-label">Correct answer (for auto-grading)</label>
+                                <InputText v-model="q.answer" placeholder="e.g. Photosynthesis" />
+                            </div>
+                            <div v-else-if="q.type === 'code'" class="q-extra">
+                                <label class="q-extra-label">Programming language</label>
+                                <Select v-model="q.language" :options="codeLanguageOptions" optionLabel="label" optionValue="value" placeholder="Select language" @change="applyStarter(q)" />
+                                <label class="q-extra-label">Starter template (optional)</label>
+                                <Textarea v-model="q.starter" rows="5" autoResize class="code-area" placeholder="Leave blank to use the built-in template" />
+                            </div>
+                            <div v-else-if="q.type === 'essay'" class="q-extra">
+                                <label class="q-extra-label">Model answer / keywords (optional, helps AI scoring)</label>
+                                <Textarea v-model="q.answer" rows="3" autoResize placeholder="Reference answer the AI will compare against" />
+                            </div>
+                            <p v-else class="q-hint">Students will type a free-text answer.</p>
                         </div>
                         <Button label="Add New Question" icon="pi pi-plus" outlined @click="addQuestion" />
                         <p v-if="!taskForm.questions.length" class="empty">No questions yet. Add one to get started.</p>
@@ -1106,46 +1045,6 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                     <Button v-if="taskStep === 2" label="Back" icon="pi pi-arrow-left" text @click="taskStep = 1" />
                     <Button v-if="taskStep === 1" label="Next: Questions" icon="pi pi-arrow-right" iconPos="right" :disabled="!taskForm.name.trim()" @click="taskStep = 2" />
                     <Button v-else label="Create Task" icon="pi pi-check" :loading="savingTask" @click="saveTask" />
-                </template>
-            </Dialog>
-
-            <Dialog v-model:visible="showExam" modal :closable="false" :header="examTask?.name || 'Task'" :style="{ width: '680px' }">
-                <div v-if="examTask" class="exam">
-                    <div v-if="examTask.advanced && (examTask.advanced.fullscreen || examTask.advanced.camera || examTask.advanced.fs_exit || examTask.advanced.fs_shortcuts)" class="exam-proctor">
-                        <i class="pi pi-shield"></i>
-                        <span>This task is proctored. Activity such as leaving fullscreen, keyboard shortcuts, tab switching and refreshing is logged for your teacher.</span>
-                    </div>
-                    <p v-if="examTask.description" class="exam-desc">{{ examTask.description }}</p>
-
-                    <div v-if="examSubmitted" class="exam-done">
-                        <i class="pi pi-check-circle"></i>
-                        <p>You have submitted this task. Your answers are locked.</p>
-                    </div>
-
-                    <div v-for="(q, qi) in examTask.questions" :key="qi" class="exam-q">
-                        <div class="exam-q-head"><strong>{{ qi + 1 }}. {{ q.name || 'Untitled question' }}</strong><Tag :value="q.type" class="cap" severity="secondary" /></div>
-
-                        <div v-if="q.type === 'radio'" class="exam-opts">
-                            <label v-for="(o, oi) in q.options" :key="oi" class="exam-opt">
-                                <RadioButton v-model="examAnswers[qi]" :value="o.text" :disabled="examSubmitted" />
-                                <span>{{ o.text }}</span>
-                            </label>
-                        </div>
-                        <div v-else-if="q.type === 'checkbox'" class="exam-opts">
-                            <label v-for="(o, oi) in q.options" :key="oi" class="exam-opt">
-                                <Checkbox v-model="examAnswers[qi]" :value="o.text" :disabled="examSubmitted" />
-                                <span>{{ o.text }}</span>
-                            </label>
-                        </div>
-                        <Textarea v-else v-model="examAnswers[qi]" :rows="q.type === 'code' ? 6 : 3" autoResize :disabled="examSubmitted"
-                            :class="{ 'code-area': q.type === 'code' }" :placeholder="q.type === 'code' ? 'Write your code…' : 'Your answer…'" />
-                    </div>
-
-                    <p v-if="!examTask.questions || !examTask.questions.length" class="empty">This task has no questions.</p>
-                </div>
-                <template #footer>
-                    <Button :label="examSubmitted ? 'Close' : 'Save & Close'" text @click="closeExam" />
-                    <Button v-if="!examSubmitted" label="Submit" icon="pi pi-send" :loading="examSubmitting" @click="submitExam" />
                 </template>
             </Dialog>
 
@@ -1171,11 +1070,23 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                         </div>
                         <p v-else class="sub-clean"><i class="pi pi-check"></i> No flagged activity.</p>
 
+                        <div v-if="s.flags && s.flags.length" class="sub-flags">
+                            <strong class="sub-logs-title"><i class="pi pi-exclamation-triangle"></i> Possible plagiarism</strong>
+                            <div v-for="(f, fi) in s.flags" :key="fi" class="sub-flag">
+                                <Tag :value="`${f.percent}% similar`" severity="danger" icon="pi pi-copy" />
+                                <span>Q{{ f.q + 1 }} matches <strong>{{ f.with }}</strong></span>
+                            </div>
+                        </div>
+
                         <div class="sub-answers">
                             <strong class="sub-logs-title"><i class="pi pi-list"></i> Answers</strong>
                             <div v-for="(q, qi) in (subsTask.questions || [])" :key="qi" class="sub-answer">
                                 <span class="sa-q">{{ qi + 1 }}. {{ q.name || 'Question' }}</span>
-                                <span class="sa-a">{{ answerText(s.answers[qi] ?? s.answers[String(qi)]) }}</span>
+                                <span class="sa-a" :class="{ code: q.type === 'code' }">{{ answerText(s.answers[qi] ?? s.answers[String(qi)]) }}</span>
+                                <div v-if="q.type === 'essay' && s.ai && s.ai.essays && s.ai.essays[qi]" class="sa-ai">
+                                    <i class="pi pi-sparkles"></i> AI score {{ s.ai.essays[qi].score }}/100
+                                    <span class="sa-ai-fb">{{ s.ai.essays[qi].feedback }}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1335,6 +1246,11 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
 .sub-answer { display: flex; flex-direction: column; gap: 0.1rem; border-left: 3px solid var(--surface-border); padding-left: 0.6rem; }
 .sa-q { font-size: 0.82rem; font-weight: 600; }
 .sa-a { font-size: 0.85rem; color: var(--muted-text); white-space: pre-wrap; }
+.sa-a.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f8fafc; border: 1px solid var(--surface-border); border-radius: 6px; padding: 0.4rem 0.55rem; }
+.sa-ai { font-size: 0.78rem; color: #4338ca; background: #eef2ff; border-radius: 6px; padding: 0.3rem 0.5rem; margin-top: 0.25rem; }
+.sa-ai-fb { display: block; color: #4f46e5; margin-top: 0.15rem; }
+.sub-flags { display: flex; flex-direction: column; gap: 0.35rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 0.5rem 0.65rem; }
+.sub-flag { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #991b1b; }
 .task-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--surface-border); margin-bottom: 1rem; }
 .task-tabs button { background: none; border: none; padding: 0.6rem 1rem; cursor: pointer; color: var(--muted-text); font-weight: 600; border-bottom: 2px solid transparent; }
 .task-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
@@ -1349,6 +1265,9 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
 .q-option { display: flex; align-items: center; gap: 0.5rem; }
 .q-option :deep(.p-inputtext) { flex: 1; }
 .q-hint { margin: 0; font-size: 0.8rem; color: var(--muted-text); font-style: italic; }
+.q-extra { display: flex; flex-direction: column; gap: 0.4rem; }
+.q-extra-label { font-size: 0.78rem; font-weight: 600; color: var(--muted-text); }
+.q-extra :deep(.code-area) { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; }
 .mod-preview-grid { display: flex; flex-direction: column; gap: 0.6rem; }
 .mod-preview { position: relative; }
 
