@@ -29,6 +29,7 @@ const solution = ref(null);
 const aiResult = ref(null);
 const myScore = ref(null);
 const objectiveTotal = ref(0);
+const pointsTotal = ref(0);
 
 let proctorAttached = false;
 let saveTimer = null;
@@ -155,8 +156,10 @@ const load = async () => {
             aiResult.value = data.submission.ai || null;
             myScore.value = data.submission.score;
             objectiveTotal.value = data.submission.gradable_total || task.value.gradable_total || 0;
+            pointsTotal.value = data.submission.points_total ?? task.value.points_total ?? 0;
         } else {
             objectiveTotal.value = task.value.gradable_total || 0;
+            pointsTotal.value = task.value.points_total ?? 0;
         }
 
         if (localStorage.getItem(`exam_ref_${taskId}`)) {
@@ -202,6 +205,7 @@ const submit = async () => {
         aiResult.value = data.submission?.ai || null;
         myScore.value = data.submission?.score ?? myScore.value;
         objectiveTotal.value = data.submission?.gradable_total || objectiveTotal.value;
+        pointsTotal.value = data.submission?.points_total ?? pointsTotal.value;
         solution.value = data.solution || solution.value;
         if (data.submission) {
             task.value.my_score = data.submission.score;
@@ -222,6 +226,7 @@ const leave = () => { router.push(`/dashboard/classes/${token}`); };
 const isCorrectOption = (qi, text) => Array.isArray(solution.value?.[qi]) && solution.value[qi].includes(text);
 const essayFeedback = (qi) => aiResult.value?.essays?.[qi] || null;
 const codeFeedback = (qi) => aiResult.value?.code?.[qi] || null;
+const questionPoints = (qi) => (aiResult.value?.breakdown || []).find((b) => b.q === qi) || null;
 const q_isAnswered = (item) => {
     const a = answers.value?.[item.qi];
     return item.q.type === 'checkbox' ? Array.isArray(a) && a.length : (a !== '' && a != null);
@@ -234,37 +239,41 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
 </script>
 
 <template>
-    <div class="exam">
-        <div v-if="loading" class="exam-state"><i class="pi pi-spin pi-spinner"></i> Loading exam…</div>
-        <div v-else-if="error" class="exam-state err">{{ error }} <Button label="Back to class" text @click="leave" /></div>
-
-        <template v-else>
-            <header class="exam-top">
-                <div class="exam-top-left">
-                    <button class="exam-back" @click="leave"><i class="pi pi-arrow-left"></i></button>
-                    <div>
-                        <h1>{{ task.name }}</h1>
-                        <p class="exam-sub">
+    <div class="exam-shell">
+        <header class="exam-appbar">
+            <div class="exam-appbar-in">
+                <button class="exam-back" @click="leave"><i class="pi pi-arrow-left"></i></button>
+                <div class="exam-brand">
+                    <span class="exam-brand-mark"><i class="pi pi-pencil"></i></span>
+                    <div class="exam-brand-text">
+                        <strong v-if="task">{{ task.name }}</strong>
+                        <strong v-else>Exam</strong>
+                        <span v-if="task" class="exam-brand-sub">
                             <span class="cap">{{ task.type }}</span>
-                            <span v-if="task.duration"> · <i class="pi pi-clock"></i> {{ task.duration }} min</span>
+                            <span v-if="task.duration"> · {{ task.duration }} min</span>
                             <span> · {{ total }} question{{ total === 1 ? '' : 's' }}</span>
-                        </p>
+                        </span>
                     </div>
                 </div>
                 <Tag v-if="submitted" value="Submitted" severity="success" icon="pi pi-check" />
-                <span v-else class="exam-progress-text">{{ answeredCount }}/{{ total }} answered</span>
-            </header>
+                <span v-else-if="task" class="exam-progress-text">{{ answeredCount }}/{{ total }} answered</span>
+            </div>
+            <ProgressBar v-if="task && !submitted" :value="progress" :showValue="false" class="exam-bar" />
+        </header>
 
-            <ProgressBar v-if="!submitted" :value="progress" :showValue="false" class="exam-bar" />
+        <main class="exam">
+            <div v-if="loading" class="exam-state"><i class="pi pi-spin pi-spinner"></i> Loading exam…</div>
+            <div v-else-if="error" class="exam-state err">{{ error }} <Button label="Back to class" text @click="leave" /></div>
 
-            <!-- Submitted summary -->
-            <div v-if="submitted" class="exam-done">
+            <template v-else>
+                <!-- Submitted summary -->
+                <div v-if="submitted" class="exam-done">
                 <div class="done-card">
                     <i class="pi pi-check-circle"></i>
                     <h2>Your answers were submitted</h2>
                     <div v-if="objectiveTotal" class="score-badge">
-                        <span class="score-num">{{ myScore ?? 0 }}<span class="score-den">%</span></span>
-                        <span class="score-label"><i class="pi pi-sparkles"></i> AI-graded score</span>
+                        <span class="score-num">{{ myScore ?? 0 }}<span class="score-den">/{{ pointsTotal }}</span></span>
+                        <span class="score-label">Points earned</span>
                     </div>
                     <p v-else class="muted">This task has no auto-graded questions. Your teacher will review it.</p>
                     <Button label="Back to class" icon="pi pi-arrow-left" @click="leave" />
@@ -290,7 +299,7 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                             <div v-if="essayFeedback(qi)" class="ai-box">
                                 <i class="pi pi-sparkles"></i>
                                 <div>
-                                    <strong>AI score: {{ essayFeedback(qi).score }}/100</strong>
+                                    <strong v-if="questionPoints(qi)">Points: {{ questionPoints(qi).earned }}/{{ questionPoints(qi).max }}</strong>
                                     <span class="ai-engine">{{ essayFeedback(qi).engine === 'ai' ? 'AI graded' : 'Auto graded' }}</span>
                                     <p>{{ essayFeedback(qi).feedback }}</p>
                                 </div>
@@ -301,7 +310,7 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                             <div v-if="codeFeedback(qi)" class="ai-box">
                                 <i class="pi pi-sparkles"></i>
                                 <div>
-                                    <strong>AI score: {{ codeFeedback(qi).score }}/100</strong>
+                                    <strong v-if="questionPoints(qi)">Points: {{ questionPoints(qi).earned }}/{{ questionPoints(qi).max }}</strong>
                                     <span class="ai-engine">{{ codeFeedback(qi).engine === 'ai' ? 'AI graded' : 'Auto graded' }}</span>
                                     <p>{{ codeFeedback(qi).feedback }}</p>
                                 </div>
@@ -372,23 +381,29 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                     <i class="pi pi-eye"></i> This session is monitored. Leaving the tab, exiting fullscreen, or using shortcuts is recorded.
                 </p>
             </div>
-        </template>
+            </template>
+        </main>
     </div>
 </template>
 
 <style scoped>
-.exam { max-width: 880px; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+.exam-shell { min-height: 100vh; background: #f4f6fb; }
+.exam-appbar { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.9); backdrop-filter: blur(8px); border-bottom: 1px solid #e7ebf2; }
+.exam-appbar-in { max-width: 880px; margin: 0 auto; padding: .7rem 1rem; display: flex; align-items: center; gap: .85rem; }
+.exam-brand { display: flex; align-items: center; gap: .7rem; flex: 1 1 auto; min-width: 0; }
+.exam-brand-mark { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--accent, #4f46e5); color: #fff; font-size: 1rem; }
+.exam-brand-text { display: flex; flex-direction: column; min-width: 0; }
+.exam-brand-text strong { font-size: 1rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.exam-brand-sub { font-size: .78rem; color: #64748b; }
+.exam-back { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; color: #334155; transition: .15s; }
+.exam-back:hover { background: #f1f5f9; }
+.exam-progress-text { font-size: .82rem; color: #64748b; font-weight: 600; white-space: nowrap; }
+.exam-bar { height: 4px; border-radius: 0; }
+
+.exam { max-width: 880px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
 .exam-state { padding: 4rem 1rem; text-align: center; color: #64748b; }
 .exam-state.err { color: #ef4444; }
-.exam-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
-.exam-top-left { display: flex; align-items: center; gap: .75rem; }
-.exam-back { width: 38px; height: 38px; border-radius: 50%; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; color: #334155; }
-.exam-back:hover { background: #f1f5f9; }
-.exam-top h1 { font-size: 1.3rem; margin: 0; }
-.exam-sub { margin: .15rem 0 0; color: #64748b; font-size: .85rem; }
 .cap { text-transform: capitalize; }
-.exam-progress-text { font-size: .85rem; color: #64748b; font-weight: 600; }
-.exam-bar { height: 6px; margin-bottom: 1.5rem; }
 
 .q-nav { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.25rem; }
 .q-dot { width: 34px; height: 34px; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; font-weight: 600; color: #475569; }
@@ -420,17 +435,17 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
 .proctor-note { margin-top: 1rem; font-size: .8rem; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; padding: .55rem .8rem; border-radius: 10px; }
 
 .exam-done { display: flex; flex-direction: column; gap: 1.5rem; }
-.done-card { text-align: center; background: #fff; border: 1px solid #e9edf3; border-radius: 16px; padding: 2.5rem 1.5rem; }
-.done-card .pi-check-circle { font-size: 3rem; color: #10b981; }
-.done-card h2 { margin: .75rem 0 .35rem; }
+.done-card { text-align: center; background: #fff; border: 1px solid #e9edf3; border-radius: 18px; padding: 2.75rem 1.5rem; box-shadow: 0 10px 30px rgba(15,23,42,.06); }
+.done-card .pi-check-circle { font-size: 3.25rem; color: #10b981; }
+.done-card h2 { margin: .75rem 0 .35rem; font-size: 1.35rem; }
 .done-card p { color: #475569; margin-bottom: 1.25rem; }
-.score-badge { display: inline-flex; flex-direction: column; align-items: center; gap: .2rem; margin: .5rem 0 1.25rem; padding: .9rem 1.6rem; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 14px; }
-.score-num { font-size: 2.2rem; font-weight: 800; color: #047857; line-height: 1; }
-.score-den { font-size: 1.1rem; font-weight: 600; color: #10b981; }
+.score-badge { display: inline-flex; flex-direction: column; align-items: center; gap: .2rem; margin: 1rem 0 1.5rem; padding: 1.1rem 2rem; background: linear-gradient(180deg, #ecfdf5, #d1fae5); border: 1px solid #a7f3d0; border-radius: 16px; box-shadow: 0 6px 18px rgba(16,185,129,.15); }
+.score-num { font-size: 2.6rem; font-weight: 800; color: #047857; line-height: 1; }
+.score-den { font-size: 1.2rem; font-weight: 600; color: #10b981; }
 .score-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #059669; font-weight: 700; }
 
-.review h3 { margin: 0 0 1rem; }
-.review-q { background: #fff; border: 1px solid #e9edf3; border-radius: 14px; padding: 1.1rem 1.25rem; margin-bottom: 1rem; }
+.review h3 { margin: 0 0 1rem; font-size: 1.1rem; }
+.review-q { background: #fff; border: 1px solid #e9edf3; border-radius: 14px; padding: 1.1rem 1.25rem; margin-bottom: 1rem; box-shadow: 0 4px 16px rgba(15,23,42,.04); }
 .review-head { display: flex; gap: .6rem; align-items: flex-start; font-weight: 600; margin-bottom: .75rem; }
 .rq-num { background: var(--accent, #4f46e5); color: #fff; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; flex: 0 0 auto; }
 .review-opts { display: flex; flex-direction: column; gap: .4rem; }

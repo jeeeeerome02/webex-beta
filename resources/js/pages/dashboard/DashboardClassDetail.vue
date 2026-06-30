@@ -624,6 +624,7 @@ const logMeta = {
 };
 const fmtTime = (iso) => { try { return new Date(iso).toLocaleTimeString(); } catch { return ''; } };
 const answerText = (a) => Array.isArray(a) ? (a.length ? a.join(', ') : '—') : (a || '—');
+const aiPoints = (s, qi) => (s.ai?.breakdown || []).find((b) => b.q === qi) || null;
 
 onMounted(load);
 </script>
@@ -683,7 +684,7 @@ onMounted(load);
                                         <Tag v-if="p.is_hidden" value="hidden" severity="secondary" />
                                         <Button v-if="p.is_mine || isOwner || canPin" icon="pi pi-ellipsis-h" text rounded size="small" @click="openPostMenu($event, p)" />
                                     </div>
-                                    <p class="post-body" v-html="p.body"></p>
+                                    <p class="post-body" :class="`kind-${p.kind}`" v-html="p.body"></p>
                                     <div class="post-actions">
                                         <button class="act" :class="{ on: p.liked }" @click="like(p)">
                                             <i class="pi pi-thumbs-up"></i> {{ p.likes_count }}
@@ -828,7 +829,7 @@ onMounted(load);
                                         <template v-else>
                                             <template v-if="t.my_status === 'submitted'">
                                                 <Tag value="Submitted" icon="pi pi-check" severity="success" />
-                                                <Tag v-if="t.gradable_total" :value="`AI score ${t.my_score ?? 0}%`" icon="pi pi-sparkles" severity="info" />
+                                                <Tag v-if="t.gradable_total" :value="`Score ${t.my_score ?? 0}/${t.points_total ?? 0}`" icon="pi pi-check-circle" severity="info" />
                                                 <Button label="View result" icon="pi pi-eye" size="small" text @click="openExam(t)" />
                                             </template>
                                             <Button v-else :label="t.questions_count ? 'Answer' : 'Open'" icon="pi pi-pencil" size="small" @click="openExam(t)" />
@@ -1063,7 +1064,7 @@ onMounted(load);
                         <div class="sub-head">
                             <UserAvatar :src="s.avatar_url" :name="s.student" :size="34" />
                             <div class="sub-by"><strong>{{ s.student }}</strong><span>{{ s.status === 'submitted' ? ('Submitted ' + (s.submitted_at || '')) : 'In progress' }}</span></div>
-                            <Tag v-if="s.gradable_total" :value="`${s.score ?? 0}%`" icon="pi pi-sparkles" severity="success" />
+                            <Tag v-if="s.gradable_total" :value="`${s.score ?? 0}/${s.points_total ?? 0}`" icon="pi pi-check-circle" severity="success" />
                             <Tag :value="s.status" :severity="s.status === 'submitted' ? 'success' : 'secondary'" />
                         </div>
 
@@ -1091,12 +1092,16 @@ onMounted(load);
                                 <span class="sa-q">{{ qi + 1 }}. {{ q.name || 'Question' }}</span>
                                 <span class="sa-a" :class="{ code: q.type === 'code' }">{{ answerText(s.answers[qi] ?? s.answers[String(qi)]) }}</span>
                                 <div v-if="q.type === 'essay' && s.ai && s.ai.essays && s.ai.essays[qi]" class="sa-ai">
-                                    <i class="pi pi-sparkles"></i> AI score {{ s.ai.essays[qi].score }}/100
-                                    <span class="sa-ai-fb">{{ s.ai.essays[qi].feedback }}</span>
+                                    <i class="pi pi-sparkles"></i>
+                                    <strong v-if="aiPoints(s, qi)">{{ aiPoints(s, qi).earned }}/{{ aiPoints(s, qi).max }} pts</strong>
+                                    <span class="sa-ai-tag">{{ s.ai.essays[qi].engine === 'ai' ? 'AI graded' : 'Auto graded' }}</span>
+                                    <span class="sa-ai-fb"><strong>Why:</strong> {{ s.ai.essays[qi].feedback }}</span>
                                 </div>
                                 <div v-if="q.type === 'code' && s.ai && s.ai.code && s.ai.code[qi]" class="sa-ai">
-                                    <i class="pi pi-sparkles"></i> AI score {{ s.ai.code[qi].score }}/100
-                                    <span class="sa-ai-fb">{{ s.ai.code[qi].feedback }}</span>
+                                    <i class="pi pi-sparkles"></i>
+                                    <strong v-if="aiPoints(s, qi)">{{ aiPoints(s, qi).earned }}/{{ aiPoints(s, qi).max }} pts</strong>
+                                    <span class="sa-ai-tag">{{ s.ai.code[qi].engine === 'ai' ? 'AI graded' : 'Auto graded' }}</span>
+                                    <span class="sa-ai-fb"><strong>Why:</strong> {{ s.ai.code[qi].feedback }}</span>
                                 </div>
                             </div>
                         </div>
@@ -1134,6 +1139,22 @@ onMounted(load);
 .post-by span { font-size: 0.75rem; color: var(--muted-text); }
 .post-body { margin: 0; white-space: pre-wrap; }
 .post-body :deep(img) { max-width: 100%; height: auto; border-radius: 8px; margin: 0.5rem 0; }
+/* Task / module timeline cards */
+.post-body.kind-task, .post-body.kind-module { white-space: normal; }
+.post-body :deep(.tl-card) { display: flex; gap: 0.85rem; align-items: flex-start; background: var(--navbar-hover, #f6f8fb); border: 1px solid var(--surface-border); border-radius: 12px; padding: 0.85rem 1rem; }
+.post-body :deep(.tl-card-ico) { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--accent, #4f46e5); color: #fff; font-size: 1.05rem; }
+.post-body :deep(.tl-module .tl-card-ico) { background: #0ea5e9; }
+.post-body :deep(.tl-card-main) { flex: 1; min-width: 0; }
+.post-body :deep(.tl-card-tag) { display: inline-block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent, #4f46e5); }
+.post-body :deep(.tl-card-title) { display: block; font-size: 1rem; margin: 0.1rem 0 0.3rem; }
+.post-body :deep(.tl-card-text) { margin: 0.15rem 0 0; color: var(--page-text); }
+.post-body :deep(.tl-files) { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.7rem; }
+.post-body :deep(.tl-file) { display: flex; align-items: center; gap: 0.55rem; max-width: 240px; padding: 0.4rem 0.6rem; border: 1px solid var(--surface-border); border-radius: 10px; background: var(--navbar-bg, #fff); text-decoration: none; color: var(--page-text); transition: 0.15s; }
+.post-body :deep(.tl-file:hover) { border-color: var(--accent, #4f46e5); box-shadow: 0 4px 12px rgba(15,23,42,0.08); }
+.post-body :deep(.tl-file-img) { width: 38px; height: 38px; object-fit: cover; border-radius: 8px; margin: 0; }
+.post-body :deep(.tl-file-ico) { width: 38px; height: 38px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--navbar-hover, #eef2f7); color: var(--muted-text); }
+.post-body :deep(.tl-file-name) { font-size: 0.8rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.post-body :deep(.tl-file-go) { margin-left: auto; font-size: 0.75rem; color: var(--muted-text); }
 .post-actions { display: flex; gap: 1rem; border-top: 1px solid var(--surface-border); padding-top: 0.5rem; }
 .act { background: none; border: none; cursor: pointer; color: var(--muted-text); display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
 .act.on { color: var(--accent); font-weight: 600; }
@@ -1258,8 +1279,11 @@ onMounted(load);
 .sa-q { font-size: 0.82rem; font-weight: 600; }
 .sa-a { font-size: 0.85rem; color: var(--muted-text); white-space: pre-wrap; }
 .sa-a.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f8fafc; border: 1px solid var(--surface-border); border-radius: 6px; padding: 0.4rem 0.55rem; }
-.sa-ai { font-size: 0.78rem; color: #4338ca; background: #eef2ff; border-radius: 6px; padding: 0.3rem 0.5rem; margin-top: 0.25rem; }
-.sa-ai-fb { display: block; color: #4f46e5; margin-top: 0.15rem; }
+.sa-ai { font-size: 0.78rem; color: #4338ca; background: #eef2ff; border-radius: 6px; padding: 0.4rem 0.55rem; margin-top: 0.25rem; }
+.sa-ai strong { font-weight: 700; }
+.sa-ai-tag { display: inline-block; margin-left: 0.4rem; font-size: 0.68rem; background: #4f46e5; color: #fff; padding: 0.05rem 0.4rem; border-radius: 6px; vertical-align: middle; }
+.sa-ai-fb { display: block; color: #4f46e5; margin-top: 0.2rem; }
+.sa-ai-fb strong { color: #4338ca; }
 .sub-flags { display: flex; flex-direction: column; gap: 0.35rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 0.5rem 0.65rem; }
 .sub-flag { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #991b1b; }
 .task-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--surface-border); margin-bottom: 1rem; }

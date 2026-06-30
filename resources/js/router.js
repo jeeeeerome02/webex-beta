@@ -60,7 +60,6 @@ const routes = [
             { path: '', name: 'Dashboard', component: DashboardHome },
             { path: 'classes', name: 'DashboardClasses', component: DashboardClasses },
             { path: 'classes/:id', name: 'DashboardClassDetail', component: DashboardClassDetail },
-            { path: 'classes/:id/task/:taskId', name: 'DashboardTaskExam', component: DashboardTaskExam },
             { path: 'users/:id', name: 'DashboardUserProfile', component: DashboardUserProfile },
             { path: 'chat', name: 'DashboardChat', component: DashboardChat },
             { path: 'notifications', name: 'DashboardNotifications', component: DashboardNotifications },
@@ -73,6 +72,12 @@ const routes = [
         name: 'ClassInvite',
         component: ClassInvite,
         meta: { title: 'Class Invite' },
+    },
+    {
+        path: '/dashboard/classes/:id/task/:taskId',
+        name: 'DashboardTaskExam',
+        component: DashboardTaskExam,
+        meta: { title: 'Exam', requiresAuth: true },
     }
 ];
 

@@ -25,6 +25,7 @@ class ClassroomTaskSubmission extends Model
         'logs' => 'array',
         'ai' => 'array',
         'order' => 'array',
+        'score' => 'float',
         'started_at' => 'datetime',
         'submitted_at' => 'datetime',
     ];

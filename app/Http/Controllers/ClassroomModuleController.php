@@ -69,13 +69,28 @@ class ClassroomModuleController extends Controller
             'files' => $files,
         ]);
 
-        // Mirror to the class timeline.
-        $fileLinks = collect($files)->map(fn ($f) => '<p><a href="'.e($f['url']).'" target="_blank" rel="noopener"><i class="pi pi-paperclip"></i> '.e($f['name']).'</a></p>')->implode('');
+        // Mirror to the class timeline as a module card (files open in a new tab).
+        $fileCards = collect($files)->map(function ($f) {
+            $isImg = isset($f['mime']) && str_starts_with((string) $f['mime'], 'image/');
+            $thumb = $isImg
+                ? '<img class="tl-file-img" src="'.e($f['url']).'" alt="'.e($f['name']).'">'
+                : '<span class="tl-file-ico"><i class="pi pi-file"></i></span>';
+
+            return '<a class="tl-file" href="'.e($f['url']).'" target="_blank" rel="noopener">'.$thumb.
+                '<span class="tl-file-name">'.e($f['name']).'</span>'.
+                '<i class="pi pi-external-link tl-file-go"></i></a>';
+        })->implode('');
+
         $classroom->posts()->create([
             'user_id' => $user->id,
             'kind' => 'module',
-            'body' => '<p><i class="pi pi-folder-open"></i> <strong>'.e($user->name).'</strong> posted a new module</p>'.
-                '<p>'.nl2br(e($module->description)).'</p>'.$fileLinks,
+            'body' => '<div class="tl-card tl-module">'.
+                '<span class="tl-card-ico"><i class="pi pi-folder-open"></i></span>'.
+                '<div class="tl-card-main">'.
+                '<span class="tl-card-tag">Module</span>'.
+                '<p class="tl-card-text">'.nl2br(e($module->description)).'</p>'.
+                ($fileCards ? '<div class="tl-files">'.$fileCards.'</div>' : '').
+                '</div></div>',
         ]);
 
         return response()->json(['module' => $this->serialize($module->load('author'))], 201);

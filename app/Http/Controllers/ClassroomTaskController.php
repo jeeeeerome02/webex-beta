@@ -94,14 +94,20 @@ class ClassroomTaskController extends Controller
         // Mirror to the class timeline.
         $icons = ['quiz' => 'pi pi-question-circle', 'activity' => 'pi pi-pencil', 'study' => 'pi pi-book', 'exam' => 'pi pi-file-edit'];
         $icon = $icons[$task->type] ?? 'pi pi-check-square';
-        $due = $task->deadline_at ? ' · due '.$task->deadline_at->format('M j, Y') : '';
-        $audience = $task->visibility === 'specific' ? ' for selected members' : ' for everyone';
+        $due = $task->deadline_at ? ' · Due '.$task->deadline_at->format('M j, Y') : '';
+        $audience = $task->visibility === 'specific' ? 'For selected members' : 'For everyone';
+        $meta = e(ucfirst($task->type)).' · '.$audience.e($due);
         $classroom->posts()->create([
             'user_id' => $user->id,
             'kind' => 'task',
             'visible_to' => $task->visibility === 'specific' ? ($task->visible_members ?? []) : null,
-            'body' => '<p><i class="'.$icon.'"></i> <strong>'.e($user->name).'</strong> posted a new '.e(ucfirst($task->type)).$audience.': <strong>'.e($task->name).'</strong>'.e($due).'</p>'.
-                ($task->description ? '<p>'.nl2br(e($task->description)).'</p>' : ''),
+            'body' => '<div class="tl-card tl-task">'.
+                '<span class="tl-card-ico"><i class="'.$icon.'"></i></span>'.
+                '<div class="tl-card-main">'.
+                '<span class="tl-card-tag">'.$meta.'</span>'.
+                '<strong class="tl-card-title">'.e($task->name).'</strong>'.
+                ($task->description ? '<p class="tl-card-text">'.nl2br(e($task->description)).'</p>' : '').
+                '</div></div>',
         ]);
 
         $this->notifyAudience($classroom, $task, $user, $token);
@@ -363,7 +369,7 @@ class ClassroomTaskController extends Controller
         }
         $sub->ai = $result['ai'];
         $sub->status = 'submitted';
-        $sub->score = $result['percent'];
+        $sub->score = $result['earned'];
         $sub->started_at = $sub->started_at ?? now();
         $sub->submitted_at = now();
         $sub->save();
@@ -493,15 +499,18 @@ class ClassroomTaskController extends Controller
         }
 
         $percent = $max > 0 ? (int) round($earned / $max * 100) : 0;
+        $earned = round($earned, 1);
 
         return [
             'percent' => $percent,
+            'earned' => $earned,
+            'max' => $max,
             'ai' => [
                 'detail' => $detail,
                 'essays' => $essays,
                 'code' => $code,
                 'breakdown' => $breakdown,
-                'earned' => round($earned, 1),
+                'earned' => $earned,
                 'max' => $max,
                 'percent' => $percent,
             ],
