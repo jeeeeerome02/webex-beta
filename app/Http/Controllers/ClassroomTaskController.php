@@ -71,6 +71,7 @@ class ClassroomTaskController extends Controller
             'questions.*.answer' => ['nullable', 'string', 'max:5000'],
             'questions.*.language' => ['nullable', 'string', 'max:40'],
             'questions.*.starter' => ['nullable', 'string', 'max:20000'],
+            'questions.*.points' => ['nullable', 'numeric', 'min:0', 'max:1000'],
         ]);
 
         [$deadlineAt, $deadlineEnd] = $this->resolveDeadline($data);
@@ -219,6 +220,8 @@ class ClassroomTaskController extends Controller
             'questions' => $questions,
             'questions_count' => count($t->questions ?? []),
             'objective_total' => $this->objectiveTotal($t),
+            'gradable_total' => $this->gradableTotal($t),
+            'points_total' => $this->pointsTotal($t),
             'submissions_count' => $t->submissions_count ?? null,
             'my_status' => $mySub?->status,
             'my_score' => $mySub?->score,
@@ -351,17 +354,16 @@ class ClassroomTaskController extends Controller
         }
 
         $answers = $data['answers'] ?? $sub->answers ?? [];
-        [$correct, , $detail] = $this->grade($task, $answers, $ai);
-        $aiData = $this->scoreEssays($task, $answers, $ai);
+        $result = $this->autoGrade($task, $answers, $ai);
 
         $sub->answers = $answers;
         $sub->logs = $data['logs'] ?? $sub->logs ?? [];
         if (isset($data['order'])) {
             $sub->order = $data['order'];
         }
-        $sub->ai = ['detail' => $detail, 'essays' => $aiData];
+        $sub->ai = $result['ai'];
         $sub->status = 'submitted';
-        $sub->score = $correct;
+        $sub->score = $result['percent'];
         $sub->started_at = $sub->started_at ?? now();
         $sub->submitted_at = now();
         $sub->save();
@@ -431,20 +433,6 @@ class ClassroomTaskController extends Controller
         return $flags;
     }
 
-    private function scoreEssays(ClassroomTask $task, array $answers, ExamAi $ai): array
-    {
-        $out = [];
-        foreach (($task->questions ?? []) as $i => $q) {
-            if (($q['type'] ?? '') !== 'essay') {
-                continue;
-            }
-            $ans = (string) ($answers[$i] ?? $answers[(string) $i] ?? '');
-            $out[$i] = $ai->scoreEssay($ans, $q['answer'] ?? null, []);
-        }
-
-        return $out;
-    }
-
     private function solution(ClassroomTask $task): array
     {
         $sol = [];
@@ -460,56 +448,115 @@ class ClassroomTaskController extends Controller
         return $sol;
     }
 
-    private function grade(ClassroomTask $task, array $answers, ?ExamAi $ai = null): array
+    /**
+     * Auto-grade every gradable question and return an overall percentage.
+     * Objective questions (radio/checkbox/identification) are right/wrong;
+     * essays and code are graded 0-100 by the AI service. Each question is
+     * weighted equally (out of 100) and the final score is the average percent.
+     */
+    private function autoGrade(ClassroomTask $task, array $answers, ExamAi $ai): array
     {
-        $correct = 0;
-        $total = 0;
-        $detail = [];
+        $detail = [];   // objective correctness keyed by question index
+        $essays = [];   // AI essay results keyed by question index
+        $code = [];     // AI code results keyed by question index
+        $breakdown = [];
+        $earned = 0.0;
+        $max = 0.0;
+
         foreach (($task->questions ?? []) as $i => $q) {
             $type = $q['type'] ?? '';
             $ans = $answers[$i] ?? ($answers[(string) $i] ?? null);
+            $points = $this->questionPoints($q);
 
-            if ($type === 'radio') {
-                $total++;
-                $correctSet = $this->correctOptions($q);
-                $ok = is_string($ans) && count($correctSet) === 1 && $ans === $correctSet[0];
+            if (in_array($type, ['radio', 'checkbox', 'identification'], true)) {
+                $ok = $this->gradeObjective($type, $q, $ans, $ai);
                 $detail[$i] = $ok;
-                $correct += $ok ? 1 : 0;
-            } elseif ($type === 'checkbox') {
-                $total++;
-                $correctSet = $this->correctOptions($q);
-                $given = is_array($ans) ? $ans : [];
-                sort($given);
-                $want = $correctSet;
-                sort($want);
-                $ok = ! empty($want) && $given === $want;
-                $detail[$i] = $ok;
-                $correct += $ok ? 1 : 0;
-            } elseif ($type === 'identification') {
-                $total++;
-                $expected = trim((string) ($q['answer'] ?? ''));
-                $given = trim((string) ($ans ?? ''));
-                $ok = false;
-                if ($expected !== '' && $given !== '') {
-                    $sim = $ai ? $ai->similarity($given, $expected) : ($this->loose($given) === $this->loose($expected) ? 100 : 0);
-                    $ok = $sim >= 90;
-                }
-                $detail[$i] = $ok;
-                $correct += $ok ? 1 : 0;
+                $pts = $ok ? $points : 0.0;
+                $earned += $pts;
+                $max += $points;
+                $breakdown[] = ['q' => $i, 'type' => $type, 'earned' => round($pts, 1), 'max' => $points];
+            } elseif ($type === 'essay') {
+                $res = $ai->scoreEssay((string) ($ans ?? ''), $q['answer'] ?? null, [], (int) round($points));
+                $essays[$i] = $res;
+                $pts = $points * ($res['score'] / 100);
+                $earned += $pts;
+                $max += $points;
+                $breakdown[] = ['q' => $i, 'type' => $type, 'earned' => round($pts, 1), 'max' => $points];
+            } elseif ($type === 'code') {
+                $res = $ai->scoreCode((string) ($ans ?? ''), $q['language'] ?? null, $q['answer'] ?? null, (int) round($points));
+                $code[$i] = $res;
+                $pts = $points * ($res['score'] / 100);
+                $earned += $pts;
+                $max += $points;
+                $breakdown[] = ['q' => $i, 'type' => $type, 'earned' => round($pts, 1), 'max' => $points];
             }
         }
 
-        return [$correct, $total, $detail];
+        $percent = $max > 0 ? (int) round($earned / $max * 100) : 0;
+
+        return [
+            'percent' => $percent,
+            'ai' => [
+                'detail' => $detail,
+                'essays' => $essays,
+                'code' => $code,
+                'breakdown' => $breakdown,
+                'earned' => round($earned, 1),
+                'max' => $max,
+                'percent' => $percent,
+            ],
+        ];
+    }
+
+    private function gradeObjective(string $type, array $q, $ans, ExamAi $ai): bool
+    {
+        if ($type === 'radio') {
+            $set = $this->correctOptions($q);
+
+            return is_string($ans) && count($set) === 1 && $ans === $set[0];
+        }
+        if ($type === 'checkbox') {
+            $set = $this->correctOptions($q);
+            $given = is_array($ans) ? $ans : [];
+            sort($given);
+            sort($set);
+
+            return ! empty($set) && $given === $set;
+        }
+        // identification
+        $expected = trim((string) ($q['answer'] ?? ''));
+        $given = trim((string) ($ans ?? ''));
+        if ($expected === '' || $given === '') {
+            return false;
+        }
+
+        return $ai->similarity($given, $expected) >= 90;
+    }
+
+    private function gradableTotal(ClassroomTask $t): int
+    {
+        return collect($t->questions ?? [])->filter(fn ($q) => in_array($q['type'] ?? '', ['radio', 'checkbox', 'identification', 'essay', 'code'], true))->count();
+    }
+
+    /** Teacher-assigned weight for a question; defaults to 1 point. */
+    private function questionPoints(array $q): float
+    {
+        $p = $q['points'] ?? null;
+
+        return is_numeric($p) && (float) $p > 0 ? (float) $p : 1.0;
+    }
+
+    /** Sum of points across all gradable questions. */
+    private function pointsTotal(ClassroomTask $t): float
+    {
+        return collect($t->questions ?? [])
+            ->filter(fn ($q) => in_array($q['type'] ?? '', ['radio', 'checkbox', 'identification', 'essay', 'code'], true))
+            ->reduce(fn ($sum, $q) => $sum + $this->questionPoints($q), 0.0);
     }
 
     private function correctOptions(array $q): array
     {
         return collect($q['options'] ?? [])->filter(fn ($o) => ! empty($o['correct']))->map(fn ($o) => $o['text'] ?? '')->values()->all();
-    }
-
-    private function loose(string $s): string
-    {
-        return preg_replace('/[^a-z0-9]/', '', strtolower($s)) ?? $s;
     }
 
     private function serializeSubmission(ClassroomTaskSubmission $s, ClassroomTask $task, bool $withStudent = false): array
@@ -522,6 +569,8 @@ class ClassroomTaskController extends Controller
             'status' => $s->status,
             'score' => $s->score,
             'objective_total' => $this->objectiveTotal($task),
+            'gradable_total' => $this->gradableTotal($task),
+            'points_total' => $this->pointsTotal($task),
             'started_at' => $s->started_at?->toIso8601String(),
             'submitted_at' => $s->submitted_at?->diffForHumans(),
         ];

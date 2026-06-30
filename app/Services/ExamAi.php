@@ -100,15 +100,16 @@ class ExamAi
     /**
      * Score an essay answer 0-100 with short feedback.
      * Uses an optional reference/model answer or keyword rubric when provided.
+     * $points (when given) tells the AI the weight of this question.
      */
-    public function scoreEssay(string $answer, ?string $reference = null, array $keywords = []): array
+    public function scoreEssay(string $answer, ?string $reference = null, array $keywords = [], ?int $points = null): array
     {
         $answer = trim($answer);
         if ($answer === '') {
             return ['score' => 0, 'feedback' => 'No answer provided.', 'engine' => 'local'];
         }
 
-        $remote = $this->scoreEssayRemote($answer, $reference, $keywords);
+        $remote = $this->scoreEssayRemote($answer, $reference, $keywords, $points);
         if ($remote) {
             return $remote;
         }
@@ -149,7 +150,76 @@ class ExamAi
     }
 
     /** Optional upgrade via a free OpenAI-compatible endpoint. */
-    private function scoreEssayRemote(string $answer, ?string $reference, array $keywords): ?array
+    private function scoreEssayRemote(string $answer, ?string $reference, array $keywords, ?int $points = null): ?array
+    {
+        $rubric = $reference ? "Model answer: {$reference}" : ($keywords ? 'Key points: '.implode(', ', $keywords) : 'No model answer; judge depth and coherence.');
+        $weight = $points ? "This question is worth {$points} point(s); grade proportionally as a 0-100 percentage of full marks. " : '';
+
+        return $this->chat(
+            'You are a strict but fair exam grader. Reply ONLY with compact JSON: {"score": <0-100 integer>, "feedback": "<one sentence>"}.',
+            "{$weight}{$rubric}\n\nStudent answer:\n{$answer}"
+        );
+    }
+
+    /**
+     * Auto-grade a code answer 0-100 with short feedback.
+     * Uses a reference solution when provided, otherwise judges structure and completeness.
+     * $points (when given) tells the AI the weight of this question.
+     */
+    public function scoreCode(string $answer, ?string $language = null, ?string $reference = null, ?int $points = null): array
+    {
+        $answer = trim($answer);
+        if ($answer === '') {
+            return ['score' => 0, 'feedback' => 'No code submitted.', 'engine' => 'local'];
+        }
+
+        $remote = $this->scoreCodeRemote($answer, $language, $reference, $points);
+        if ($remote) {
+            return $remote;
+        }
+
+        $lines = substr_count($answer, "\n") + 1;
+        $notes = [];
+        $score = 0;
+
+        if ($reference && trim($reference) !== '') {
+            $sim = $this->similarity($answer, $reference);
+            $score = (int) round($sim);
+            $notes[] = "Similarity to reference solution: {$sim}%.";
+        } else {
+            $constructs = ['function', 'class', 'return', 'for', 'while', 'if', 'def ', 'public', 'private', '=>', 'import', 'include', 'print', 'echo', 'console', 'System.out'];
+            $hits = 0;
+            foreach ($constructs as $c) {
+                if (stripos($answer, $c) !== false) {
+                    $hits++;
+                }
+            }
+            $balanced = (substr_count($answer, '{') === substr_count($answer, '}')) && (substr_count($answer, '(') === substr_count($answer, ')'));
+            $score = min(100, 35 + ($hits * 6) + min(20, intdiv($lines, 2)) + ($balanced ? 10 : 0));
+            $notes[] = 'No reference solution set — scored on structure and completeness.';
+            if (! $balanced) {
+                $notes[] = 'Unbalanced brackets detected.';
+            }
+        }
+
+        $notes[] = "{$lines} line(s)".($language ? " of {$language}" : '').'.';
+
+        return ['score' => max(0, min(100, $score)), 'feedback' => implode(' ', $notes), 'engine' => 'local'];
+    }
+
+    private function scoreCodeRemote(string $answer, ?string $language, ?string $reference, ?int $points = null): ?array
+    {
+        $weight = $points ? "This question is worth {$points} point(s); grade proportionally as a 0-100 percentage of full marks. " : '';
+        $ctx = ($language ? "Language: {$language}. " : '').($reference ? "Reference solution:\n{$reference}" : 'No reference solution; judge correctness, structure and completeness.');
+
+        return $this->chat(
+            'You are a strict programming exam grader. Reply ONLY with compact JSON: {"score": <0-100 integer>, "feedback": "<one sentence>"}.',
+            "{$weight}{$ctx}\n\nStudent code:\n{$answer}"
+        );
+    }
+
+    /** Shared call to a free OpenAI-compatible endpoint. Returns {score,feedback,engine:'ai'} or null. */
+    private function chat(string $system, string $user): ?array
     {
         $url = config('services.exam_ai.url');
         $key = config('services.exam_ai.key');
@@ -159,12 +229,11 @@ class ExamAi
         }
 
         try {
-            $rubric = $reference ? "Model answer: {$reference}" : ($keywords ? 'Key points: '.implode(', ', $keywords) : 'No model answer; judge depth and coherence.');
             $resp = Http::timeout(20)->withToken($key)->post(rtrim($url, '/').'/chat/completions', [
                 'model' => $model ?: 'meta-llama/llama-3.1-8b-instruct:free',
                 'messages' => [
-                    ['role' => 'system', 'content' => 'You are a strict but fair exam grader. Reply ONLY with compact JSON: {"score": <0-100 integer>, "feedback": "<one sentence>"}.'],
-                    ['role' => 'user', 'content' => "{$rubric}\n\nStudent answer:\n{$answer}"],
+                    ['role' => 'system', 'content' => $system],
+                    ['role' => 'user', 'content' => $user],
                 ],
                 'temperature' => 0.2,
             ]);

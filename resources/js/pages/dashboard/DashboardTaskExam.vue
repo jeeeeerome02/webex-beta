@@ -154,9 +154,9 @@ const load = async () => {
             submitted.value = data.submission.status === 'submitted';
             aiResult.value = data.submission.ai || null;
             myScore.value = data.submission.score;
-            objectiveTotal.value = data.submission.objective_total || task.value.objective_total || 0;
+            objectiveTotal.value = data.submission.gradable_total || task.value.gradable_total || 0;
         } else {
-            objectiveTotal.value = task.value.objective_total || 0;
+            objectiveTotal.value = task.value.gradable_total || 0;
         }
 
         if (localStorage.getItem(`exam_ref_${taskId}`)) {
@@ -201,7 +201,7 @@ const submit = async () => {
         submitted.value = true;
         aiResult.value = data.submission?.ai || null;
         myScore.value = data.submission?.score ?? myScore.value;
-        objectiveTotal.value = data.submission?.objective_total || objectiveTotal.value;
+        objectiveTotal.value = data.submission?.gradable_total || objectiveTotal.value;
         solution.value = data.solution || solution.value;
         if (data.submission) {
             task.value.my_score = data.submission.score;
@@ -221,6 +221,7 @@ const leave = () => { router.push(`/dashboard/classes/${token}`); };
 
 const isCorrectOption = (qi, text) => Array.isArray(solution.value?.[qi]) && solution.value[qi].includes(text);
 const essayFeedback = (qi) => aiResult.value?.essays?.[qi] || null;
+const codeFeedback = (qi) => aiResult.value?.code?.[qi] || null;
 const q_isAnswered = (item) => {
     const a = answers.value?.[item.qi];
     return item.q.type === 'checkbox' ? Array.isArray(a) && a.length : (a !== '' && a != null);
@@ -262,8 +263,8 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                     <i class="pi pi-check-circle"></i>
                     <h2>Your answers were submitted</h2>
                     <div v-if="objectiveTotal" class="score-badge">
-                        <span class="score-num">{{ myScore ?? 0 }}<span class="score-den">/{{ objectiveTotal }}</span></span>
-                        <span class="score-label">Auto-graded score</span>
+                        <span class="score-num">{{ myScore ?? 0 }}<span class="score-den">%</span></span>
+                        <span class="score-label"><i class="pi pi-sparkles"></i> AI-graded score</span>
                     </div>
                     <p v-else class="muted">This task has no auto-graded questions. Your teacher will review it.</p>
                     <Button label="Back to class" icon="pi pi-arrow-left" @click="leave" />
@@ -297,6 +298,14 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
                         </div>
                         <div v-else class="review-essay">
                             <pre class="ans-pre code">{{ answers[qi] || '—' }}</pre>
+                            <div v-if="codeFeedback(qi)" class="ai-box">
+                                <i class="pi pi-sparkles"></i>
+                                <div>
+                                    <strong>AI score: {{ codeFeedback(qi).score }}/100</strong>
+                                    <span class="ai-engine">{{ codeFeedback(qi).engine === 'ai' ? 'AI graded' : 'Auto graded' }}</span>
+                                    <p>{{ codeFeedback(qi).feedback }}</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

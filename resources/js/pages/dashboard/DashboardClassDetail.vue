@@ -11,6 +11,7 @@ import Avatar from 'primevue/avatar';
 import Tag from 'primevue/tag';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import InputNumber from 'primevue/inputnumber';
 import Textarea from 'primevue/textarea';
 import Select from 'primevue/select';
 import ToggleSwitch from 'primevue/toggleswitch';
@@ -549,7 +550,7 @@ const openTask = () => {
     showTask.value = true;
 };
 
-const addQuestion = () => taskForm.value.questions.push({ name: '', type: 'radio', options: [{ text: '', correct: false }, { text: '', correct: false }] });
+const addQuestion = () => taskForm.value.questions.push({ name: '', type: 'radio', points: 1, options: [{ text: '', correct: false }, { text: '', correct: false }] });
 const removeQuestion = (i) => taskForm.value.questions.splice(i, 1);
 const addOption = (q) => q.options.push({ text: '', correct: false });
 const removeOption = (q, i) => q.options.splice(i, 1);
@@ -827,7 +828,7 @@ onMounted(load);
                                         <template v-else>
                                             <template v-if="t.my_status === 'submitted'">
                                                 <Tag value="Submitted" icon="pi pi-check" severity="success" />
-                                                <Tag v-if="t.objective_total" :value="`Score ${t.my_score ?? 0}/${t.objective_total}`" icon="pi pi-star" severity="info" />
+                                                <Tag v-if="t.gradable_total" :value="`AI score ${t.my_score ?? 0}%`" icon="pi pi-sparkles" severity="info" />
                                                 <Button label="View result" icon="pi pi-eye" size="small" text @click="openExam(t)" />
                                             </template>
                                             <Button v-else :label="t.questions_count ? 'Answer' : 'Open'" icon="pi pi-pencil" size="small" @click="openExam(t)" />
@@ -1010,6 +1011,10 @@ onMounted(load);
                             </div>
                             <InputText v-model="q.name" placeholder="Question name / prompt" />
                             <Select v-model="q.type" :options="questionTypeOptions" optionLabel="label" optionValue="value" @change="ensureOptions(q)" />
+                            <div class="q-points">
+                                <label class="q-extra-label">Points (weight for AI scoring)</label>
+                                <InputNumber v-model="q.points" :min="0" :max="1000" :step="1" showButtons placeholder="1" />
+                            </div>
                             <div v-if="hasOptions(q)" class="q-options">
                                 <div v-for="(o, oi) in q.options" :key="oi" class="q-option">
                                     <RadioButton v-if="q.type === 'radio'" :modelValue="o.correct" :value="true" @update:modelValue="markCorrect(q, oi)" />
@@ -1028,6 +1033,8 @@ onMounted(load);
                                 <Select v-model="q.language" :options="codeLanguageOptions" optionLabel="label" optionValue="value" placeholder="Select language" @change="applyStarter(q)" />
                                 <label class="q-extra-label">Starter template (optional)</label>
                                 <Textarea v-model="q.starter" rows="5" autoResize class="code-area" placeholder="Leave blank to use the built-in template" />
+                                <label class="q-extra-label">Model solution (optional, helps AI scoring)</label>
+                                <Textarea v-model="q.answer" rows="5" autoResize class="code-area" placeholder="Reference solution the AI compares against" />
                             </div>
                             <div v-else-if="q.type === 'essay'" class="q-extra">
                                 <label class="q-extra-label">Model answer / keywords (optional, helps AI scoring)</label>
@@ -1056,7 +1063,7 @@ onMounted(load);
                         <div class="sub-head">
                             <UserAvatar :src="s.avatar_url" :name="s.student" :size="34" />
                             <div class="sub-by"><strong>{{ s.student }}</strong><span>{{ s.status === 'submitted' ? ('Submitted ' + (s.submitted_at || '')) : 'In progress' }}</span></div>
-                            <Tag v-if="s.objective_total" :value="`${s.score ?? 0}/${s.objective_total}`" severity="success" />
+                            <Tag v-if="s.gradable_total" :value="`${s.score ?? 0}%`" icon="pi pi-sparkles" severity="success" />
                             <Tag :value="s.status" :severity="s.status === 'submitted' ? 'success' : 'secondary'" />
                         </div>
 
@@ -1086,6 +1093,10 @@ onMounted(load);
                                 <div v-if="q.type === 'essay' && s.ai && s.ai.essays && s.ai.essays[qi]" class="sa-ai">
                                     <i class="pi pi-sparkles"></i> AI score {{ s.ai.essays[qi].score }}/100
                                     <span class="sa-ai-fb">{{ s.ai.essays[qi].feedback }}</span>
+                                </div>
+                                <div v-if="q.type === 'code' && s.ai && s.ai.code && s.ai.code[qi]" class="sa-ai">
+                                    <i class="pi pi-sparkles"></i> AI score {{ s.ai.code[qi].score }}/100
+                                    <span class="sa-ai-fb">{{ s.ai.code[qi].feedback }}</span>
                                 </div>
                             </div>
                         </div>
@@ -1266,6 +1277,7 @@ onMounted(load);
 .q-option :deep(.p-inputtext) { flex: 1; }
 .q-hint { margin: 0; font-size: 0.8rem; color: var(--muted-text); font-style: italic; }
 .q-extra { display: flex; flex-direction: column; gap: 0.4rem; }
+.q-points { display: flex; flex-direction: column; gap: 0.4rem; max-width: 220px; }
 .q-extra-label { font-size: 0.78rem; font-weight: 600; color: var(--muted-text); }
 .q-extra :deep(.code-area) { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; }
 .mod-preview-grid { display: flex; flex-direction: column; gap: 0.6rem; }
