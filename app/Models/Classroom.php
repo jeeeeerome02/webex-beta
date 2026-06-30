@@ -66,6 +66,11 @@ class Classroom extends Model
         return $this->hasMany(ClassroomModule::class);
     }
 
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(ClassroomTask::class);
+    }
+
     public function messages(): HasMany
     {
         return $this->hasMany(ClassroomMessage::class);

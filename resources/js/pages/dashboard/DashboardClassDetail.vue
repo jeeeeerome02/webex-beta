@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue';import { useRoute, useRouter } from 'vue-router';
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import Tabs from 'primevue/tabs';
 import TabList from 'primevue/tablist';
@@ -15,8 +15,11 @@ import Textarea from 'primevue/textarea';
 import Select from 'primevue/select';
 import ToggleSwitch from 'primevue/toggleswitch';
 import Menu from 'primevue/menu';
-import Editor from 'primevue/editor';
 import Dialog from 'primevue/dialog';
+import DatePicker from 'primevue/datepicker';
+import MultiSelect from 'primevue/multiselect';
+import Checkbox from 'primevue/checkbox';
+import RadioButton from 'primevue/radiobutton';
 import UserAvatar from '../../components/common/UserAvatar.vue';
 
 const route = useRoute();
@@ -67,7 +70,7 @@ const canManageModules = ref(false);
 const showModule = ref(false);
 const savingModule = ref(false);
 const uploadingModule = ref(false);
-const moduleForm = ref({ description: '', file_url: '', file_name: '', file_mime: '', file_size: 0 });
+const moduleForm = ref({ description: '', files: [] });
 const moduleInput = ref(null);
 
 // Posts sort
@@ -128,6 +131,7 @@ const load = async () => {
         loadPosts();
         loadMessages();
         loadModules();
+        loadTasks();
     } catch (e) {
         if (e.response?.status === 403) { router.replace(`/class/${token}`); return; }
         error.value = e.response?.data?.message || 'Could not load class.';
@@ -144,39 +148,41 @@ const loadPosts = async () => {
 };
 
 const createPost = async () => {
-    if (!newPost.value) return;
+    const text = newPost.value.trim();
+    if (!text && !postImages.value.length) return;
     posting.value = true;
     try {
-        const { data } = await axios.post(`/api/classrooms/${token}/posts`, { body: newPost.value });
+        const escaped = text
+            ? '<p>' + text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</p>'
+            : '';
+        const imgs = postImages.value.map((i) => `<p><img src="${i.url}" alt="${i.name}"></p>`).join('');
+        const { data } = await axios.post(`/api/classrooms/${token}/posts`, { body: escaped + imgs });
         posts.value.unshift(data.post);
         newPost.value = '';
+        postImages.value = [];
     } finally { posting.value = false; }
 };
 
-let quillRef = null;
-const onEditorLoad = ({ instance }) => {
-    quillRef = instance;
-    const toolbar = instance.getModule('toolbar');
-    toolbar.addHandler('image', () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.onchange = async () => {
-            const file = input.files[0];
-            if (!file) return;
-            if (file.size > 25 * 1024 * 1024) { alert('Image must be 25MB or smaller.'); return; }
-            try {
-                const fd = new FormData();
-                fd.append('file', file);
-                const { data } = await axios.post('/api/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                const range = quillRef.getSelection(true);
-                quillRef.insertEmbed(range.index, 'image', data.url);
-                quillRef.setSelection(range.index + 1);
-            } catch { alert('Image upload failed.'); }
-        };
-        input.click();
-    });
+const postImages = ref([]);
+const uploadingPostImage = ref(false);
+const postImageInput = ref(null);
+
+const onPostImages = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    uploadingPostImage.value = true;
+    Promise.all(files.map((file) => {
+        if (file.size > 25 * 1024 * 1024) { alert(`${file.name} exceeds 25MB.`); return null; }
+        const fd = new FormData();
+        fd.append('file', file);
+        return axios.post('/api/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(({ data }) => data);
+    }))
+        .then((results) => { results.filter(Boolean).forEach((d) => postImages.value.push({ url: d.url, name: d.name })); })
+        .catch(() => alert('Image upload failed.'))
+        .finally(() => { uploadingPostImage.value = false; e.target.value = ''; });
 };
+
+const removePostImage = (i) => postImages.value.splice(i, 1);
 
 const busy = ref({});
 
@@ -380,27 +386,28 @@ const loadModules = async () => {
 };
 
 const openModule = () => {
-    moduleForm.value = { description: '', file_url: '', file_name: '', file_mime: '', file_size: 0 };
+    moduleForm.value = { description: '', files: [] };
     showModule.value = true;
 };
 
 const onModuleFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 25 * 1024 * 1024) { alert('Max 25MB.'); return; }
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     uploadingModule.value = true;
-    const fd = new FormData();
-    fd.append('file', file);
-    axios.post('/api/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-        .then(({ data }) => {
-            moduleForm.value.file_url = data.url;
-            moduleForm.value.file_name = data.name;
-            moduleForm.value.file_mime = data.mime;
-            moduleForm.value.file_size = data.size;
+    Promise.all(files.map((file) => {
+        if (file.size > 25 * 1024 * 1024) { alert(`${file.name} exceeds 25MB.`); return null; }
+        const fd = new FormData();
+        fd.append('file', file);
+        return axios.post('/api/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(({ data }) => data);
+    }))
+        .then((results) => {
+            results.filter(Boolean).forEach((d) => moduleForm.value.files.push({ url: d.url, name: d.name, mime: d.mime, size: d.size }));
         })
         .catch(() => alert('Upload failed.'))
         .finally(() => { uploadingModule.value = false; e.target.value = ''; });
 };
+
+const removeModuleFile = (i) => moduleForm.value.files.splice(i, 1);
 
 const saveModule = async () => {
     if (!moduleForm.value.description.trim() || savingModule.value) return;
@@ -431,8 +438,274 @@ const prettySize = (bytes) => {
     const kb = bytes / 1024;
     return kb > 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB';
 };
+const openFile = (url) => window.open(url, '_blank', 'noopener');
+
+// Tasks
+const tasks = ref([]);
+const canManageTasks = ref(false);
+const showTask = ref(false);
+const savingTask = ref(false);
+const taskStep = ref(1); // 1 = details, 2 = questions
+const taskTab = ref('basic'); // basic | advanced
+const blankAdvanced = () => ({ ai_check: false, allow_mobile: false, fullscreen: false, fs_exit: false, fs_shortcuts: false, camera: false });
+const blankTask = () => ({
+    name: '', type: 'activity', description: '',
+    deadline_type: 'none', deadline_at: null, deadline_end: null,
+    duration: '', visibility: 'all', visible_members: [],
+    advanced: blankAdvanced(), questions: [],
+});
+const taskForm = ref(blankTask());
+
+const isComputerCourse = computed(() => /comp|program|software|\bit\b|coding|develop|inform|tech/i.test(cls.value?.course_type || ''));
+const taskTypeOptions = computed(() => {
+    const opts = [
+        { label: 'Quiz', value: 'quiz' },
+        { label: 'Study', value: 'study' },
+        { label: 'Exam', value: 'exam' },
+    ];
+    if (isComputerCourse.value) opts.splice(1, 0, { label: 'Activity', value: 'activity' });
+    return opts;
+});
+const deadlineOptions = [
+    { label: 'No Deadline', value: 'none' },
+    { label: 'This day', value: 'today' },
+    { label: 'Tomorrow', value: 'tomorrow' },
+    { label: 'This week', value: 'this_week' },
+    { label: 'After 2 weeks', value: 'two_weeks' },
+    { label: 'Custom range', value: 'custom' },
+];
+const durationOptions = [
+    { label: '1 hour', value: '1h' },
+    { label: '2 hours', value: '2h' },
+    { label: '1 week', value: '1w' },
+    { label: '2 weeks', value: '2w' },
+];
+const visibilityOptions = [
+    { label: 'All', value: 'all' },
+    { label: 'Specific members', value: 'specific' },
+];
+const questionTypeOptions = [
+    { label: 'Multiple choice (Radio)', value: 'radio' },
+    { label: 'Multiple choice (Checkbox)', value: 'checkbox' },
+    { label: 'Essay', value: 'essay' },
+    { label: 'Identification', value: 'identification' },
+    { label: 'Code', value: 'code' },
+];
+const memberOptions = computed(() => approvedMembers.value.filter((m) => !m.is_owner).map((m) => ({ label: m.name, value: m.id })));
+const isExam = computed(() => taskForm.value.type === 'exam');
+
+const loadTasks = async () => {
+    try {
+        const { data } = await axios.get(`/api/classrooms/${token}/tasks`);
+        tasks.value = data.tasks;
+        canManageTasks.value = data.can_manage;
+    } catch { tasks.value = []; }
+};
+
+const openTask = () => {
+    taskForm.value = blankTask();
+    if (!isComputerCourse.value) taskForm.value.type = 'quiz';
+    taskStep.value = 1;
+    taskTab.value = 'basic';
+    showTask.value = true;
+};
+
+const addQuestion = () => taskForm.value.questions.push({ name: '', type: 'radio', options: [{ text: '', correct: false }, { text: '', correct: false }] });
+const removeQuestion = (i) => taskForm.value.questions.splice(i, 1);
+const addOption = (q) => q.options.push({ text: '', correct: false });
+const removeOption = (q, i) => q.options.splice(i, 1);
+const hasOptions = (q) => q.type === 'radio' || q.type === 'checkbox';
+const markCorrect = (q, i) => {
+    if (q.type === 'radio') q.options.forEach((o, idx) => { o.correct = idx === i; });
+    else q.options[i].correct = !q.options[i].correct;
+};
+const ensureOptions = (q) => { if (hasOptions(q) && !q.options.length) q.options = [{ text: '', correct: false }, { text: '', correct: false }]; };
+
+const saveTask = async () => {
+    if (!taskForm.value.name.trim()) { taskStep.value = 1; taskTab.value = 'basic'; return; }
+    savingTask.value = true;
+    try {
+        const payload = JSON.parse(JSON.stringify(taskForm.value));
+        if (payload.visibility !== 'specific') payload.visible_members = [];
+        if (payload.deadline_type !== 'custom') { payload.deadline_at = null; payload.deadline_end = null; }
+        const { data } = await axios.post(`/api/classrooms/${token}/tasks`, payload);
+        tasks.value.unshift(data.task);
+        showTask.value = false;
+        loadPosts();
+    } catch (e) {
+        alert(e.response?.data?.message || 'Could not save task.');
+    } finally { savingTask.value = false; }
+};
+
+const archiveTask = async (t) => {
+    const { data } = await axios.post(`/api/classrooms/${token}/tasks/${t.id}/archive`);
+    t.is_archived = data.archived;
+};
+
+const deleteTask = async (t) => {
+    if (!confirm('Delete this task?')) return;
+    await axios.delete(`/api/classrooms/${token}/tasks/${t.id}`);
+    tasks.value = tasks.value.filter((x) => x.id !== t.id);
+};
+
+const taskTypeMeta = {
+    quiz: { icon: 'pi pi-question-circle', color: '#0ea5e9' },
+    activity: { icon: 'pi pi-pencil', color: '#8b5cf6' },
+    study: { icon: 'pi pi-book', color: '#10b981' },
+    exam: { icon: 'pi pi-file-edit', color: '#ef4444' },
+};
+
+// ---- Exam taking (student) ----
+const showExam = ref(false);
+const examTask = ref(null);
+const examAnswers = ref({});
+const examLogs = ref([]);
+const examSubmitted = ref(false);
+const examSubmitting = ref(false);
+let proctorAttached = false;
+let saveTimer = null;
+
+const pushLog = (type, detail) => { examLogs.value.push({ type, detail, at: new Date().toISOString() }); };
+
+const autosave = () => {
+    if (!examTask.value || examSubmitted.value) return;
+    clearTimeout(saveTimer);
+    const taskId = examTask.value.id;
+    saveTimer = setTimeout(() => {
+        axios.post(`/api/classrooms/${token}/tasks/${taskId}/submission`, { answers: examAnswers.value, logs: examLogs.value }).catch(() => {});
+    }, 700);
+};
+
+const onFsChange = () => {
+    if (!document.fullscreenElement && examTask.value?.advanced?.fullscreen && examTask.value?.advanced?.fs_exit && !examSubmitted.value) {
+        pushLog('exit_fullscreen', 'Exited fullscreen');
+        autosave();
+    }
+};
+const onKeydown = (e) => {
+    if (!examTask.value?.advanced?.fs_shortcuts || examSubmitted.value) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+        const combo = `${e.ctrlKey ? 'Ctrl+' : ''}${e.metaKey ? 'Meta+' : ''}${e.altKey ? 'Alt+' : ''}${e.key}`;
+        pushLog('shortcut', combo);
+        autosave();
+    }
+};
+const onVisibility = () => {
+    if (document.hidden && examTask.value && !examSubmitted.value) {
+        pushLog('tab_switch', 'Left the exam tab');
+        autosave();
+    }
+};
+const onBeforeUnload = () => {
+    if (showExam.value && examTask.value && !examSubmitted.value) {
+        localStorage.setItem(`exam_ref_${examTask.value.id}`, '1');
+    }
+};
+
+const attachProctor = () => {
+    if (proctorAttached) return;
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('keydown', onKeydown);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    proctorAttached = true;
+};
+const detachProctor = () => {
+    document.removeEventListener('fullscreenchange', onFsChange);
+    document.removeEventListener('keydown', onKeydown);
+    document.removeEventListener('visibilitychange', onVisibility);
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    proctorAttached = false;
+};
+const enterFullscreen = () => { document.documentElement.requestFullscreen?.().catch(() => {}); };
+const exitFullscreen = () => { if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); };
+
+const openExam = async (t) => {
+    examTask.value = t;
+    examAnswers.value = {};
+    examLogs.value = [];
+    examSubmitted.value = false;
+    (t.questions || []).forEach((q, i) => { examAnswers.value[i] = q.type === 'checkbox' ? [] : ''; });
+
+    try {
+        const { data } = await axios.get(`/api/classrooms/${token}/tasks/${t.id}/submission`);
+        if (data.submission) {
+            examAnswers.value = { ...examAnswers.value, ...(data.submission.answers || {}) };
+            examLogs.value = data.submission.logs || [];
+            examSubmitted.value = data.submission.status === 'submitted';
+        }
+    } catch { /* no prior submission */ }
+
+    if (localStorage.getItem(`exam_ref_${t.id}`)) {
+        pushLog('page_refreshed', 'Exam page was refreshed');
+        localStorage.removeItem(`exam_ref_${t.id}`);
+    }
+
+    showExam.value = true;
+    await nextTick();
+    if (!examSubmitted.value) {
+        attachProctor();
+        autosave();
+        if (t.advanced?.fullscreen) enterFullscreen();
+    }
+};
+
+const submitExam = async () => {
+    if (examSubmitting.value) return;
+    if (!confirm('Submit your answers? You will not be able to change them afterwards.')) return;
+    examSubmitting.value = true;
+    try {
+        const { data } = await axios.post(`/api/classrooms/${token}/tasks/${examTask.value.id}/submit`, { answers: examAnswers.value, logs: examLogs.value });
+        examSubmitted.value = true;
+        if (examTask.value) examTask.value.my_status = 'submitted';
+        await loadTasks();
+        closeExam();
+        if (data.submission && data.submission.objective_total) {
+            alert(`Submitted! Auto-graded objective score: ${data.submission.score}/${data.submission.objective_total}`);
+        }
+    } catch (e) {
+        alert(e.response?.data?.message || 'Could not submit.');
+    } finally { examSubmitting.value = false; }
+};
+
+const closeExam = () => {
+    clearTimeout(saveTimer);
+    detachProctor();
+    exitFullscreen();
+    showExam.value = false;
+};
+
+watch(examAnswers, () => autosave(), { deep: true });
+
+// ---- Submissions (teacher) ----
+const showSubs = ref(false);
+const subsTask = ref(null);
+const subs = ref([]);
+const loadingSubs = ref(false);
+
+const openSubs = async (t) => {
+    subsTask.value = t;
+    subs.value = [];
+    showSubs.value = true;
+    loadingSubs.value = true;
+    try {
+        const { data } = await axios.get(`/api/classrooms/${token}/tasks/${t.id}/submissions`);
+        subsTask.value = data.task;
+        subs.value = data.submissions;
+    } finally { loadingSubs.value = false; }
+};
+
+const logMeta = {
+    exit_fullscreen: { label: 'Exited fullscreen', icon: 'pi pi-window-minimize', sev: 'warn' },
+    shortcut: { label: 'Keyboard shortcut', icon: 'pi pi-bolt', sev: 'warn' },
+    tab_switch: { label: 'Left tab', icon: 'pi pi-external-link', sev: 'danger' },
+    page_refreshed: { label: 'Page refreshed', icon: 'pi pi-refresh', sev: 'info' },
+};
+const fmtTime = (iso) => { try { return new Date(iso).toLocaleTimeString(); } catch { return ''; } };
+const answerText = (a) => Array.isArray(a) ? (a.length ? a.join(', ') : '—') : (a || '—');
 
 onMounted(load);
+onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
 </script>
 
 <template>
@@ -441,7 +714,7 @@ onMounted(load);
         <p v-else-if="error" class="err">{{ error }}</p>
 
         <template v-else>
-            <header class="cd-hero">
+            <header class="cd-hero" :class="{ 'has-cover': cls.cover_image }" :style="cls.cover_image ? { backgroundImage: `linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0.45)), url(${cls.cover_image})` } : {}">
                 <h1>{{ cls.name }}</h1>
                 <p>{{ cls.course_type }} · <span class="cap">{{ cls.type }}</span> class</p>
             </header>
@@ -461,9 +734,17 @@ onMounted(load);
                             <Card v-if="canPost" class="composer">
                                 <template #content>
                                     <label class="field-label">Write a Post</label>
-                                    <Editor v-model="newPost" editorStyle="height: 120px" placeholder="Share something with the class…" @load="onEditorLoad" />
+                                    <Textarea v-model="newPost" rows="3" autoResize placeholder="Share something with the class…" />
+                                    <div v-if="postImages.length" class="post-thumbs">
+                                        <div v-for="(img, i) in postImages" :key="i" class="post-thumb">
+                                            <img :src="img.url" :alt="img.name" />
+                                            <button class="thumb-x" @click="removePostImage(i)"><i class="pi pi-times"></i></button>
+                                        </div>
+                                    </div>
                                     <div class="composer-foot">
-                                        <Button label="Post" icon="pi pi-send" size="small" :loading="posting" :disabled="!newPost" @click="createPost" />
+                                        <Button :label="uploadingPostImage ? 'Uploading…' : 'Add image'" icon="pi pi-image" size="small" text :loading="uploadingPostImage" @click="postImageInput.click()" />
+                                        <Button label="Post" icon="pi pi-send" size="small" :loading="posting" :disabled="(!newPost.trim() && !postImages.length) || uploadingPostImage" @click="createPost" />
+                                        <input ref="postImageInput" type="file" accept="image/*" multiple class="hidden-input" @change="onPostImages" />
                                     </div>
                                 </template>
                             </Card>
@@ -581,18 +862,62 @@ onMounted(load);
                                     </span>
                                 </div>
                                 <p class="mod-desc">{{ m.description }}</p>
-                                <a v-if="m.file_url" :href="m.file_url" target="_blank" class="mod-file">
-                                    <img v-if="isImageFile(m.file_mime)" :src="m.file_url" :alt="m.file_name" class="mod-thumb" />
-                                    <span v-else class="mod-file-icon"><i :class="isPdfFile(m.file_mime) ? 'pi pi-file-pdf' : 'pi pi-file'"></i></span>
-                                    <span class="mod-file-meta"><strong>{{ m.file_name }}</strong><span>{{ prettySize(m.file_size) }}</span></span>
-                                    <i class="pi pi-download"></i>
-                                </a>
+                                <div v-if="m.files && m.files.length" class="mod-files">
+                                    <div v-for="(f, fi) in m.files" :key="fi" class="mod-file">
+                                        <img v-if="isImageFile(f.mime)" :src="f.url" :alt="f.name" class="mod-thumb" />
+                                        <span v-else class="mod-file-icon"><i :class="isPdfFile(f.mime) ? 'pi pi-file-pdf' : 'pi pi-file'"></i></span>
+                                        <span class="mod-file-meta"><strong>{{ f.name }}</strong><span>{{ prettySize(f.size) }}</span></span>
+                                        <div class="mod-file-hover">
+                                            <Button label="Preview" icon="pi pi-external-link" size="small" @click="openFile(f.url)" />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <p v-if="!modules.length" class="empty">No modules yet.</p>
                         </div>
                     </TabPanel>
                     <TabPanel value="3">
-                        <div class="ph"><i class="pi pi-check-square"></i><p>Tasks coming soon.</p></div>
+                        <div class="modules">
+                            <div class="mod-head">
+                                <h4 class="feed-label">Tasks</h4>
+                                <Button v-if="canManageTasks" label="Add New Task" icon="pi pi-plus" size="small" @click="openTask" />
+                            </div>
+                            <div v-for="t in tasks" :key="t.id" class="task-card" :class="{ archived: t.is_archived }">
+                                <span class="task-icon" :style="{ background: (taskTypeMeta[t.type] || {}).color }"><i :class="(taskTypeMeta[t.type] || {}).icon"></i></span>
+                                <div class="task-main">
+                                    <div class="task-top">
+                                        <strong>{{ t.name }}</strong>
+                                        <Tag :value="t.type" class="cap" />
+                                        <Tag v-if="t.is_archived" value="archived" severity="secondary" />
+                                    </div>
+                                    <p v-if="t.description" class="task-desc">{{ t.description }}</p>
+                                    <div class="task-meta">
+                                        <span><i class="pi pi-clock"></i> {{ t.deadline_label }}</span>
+                                        <span v-if="t.duration"><i class="pi pi-hourglass"></i> {{ t.duration }}</span>
+                                        <span><i class="pi pi-list"></i> {{ t.questions_count }} question{{ t.questions_count === 1 ? '' : 's' }}</span>
+                                        <span><i class="pi pi-eye"></i> {{ t.visibility === 'all' ? 'All members' : 'Specific members' }}</span>
+                                    </div>
+                                    <div v-if="t.advanced && (t.advanced.ai_check || t.advanced.camera || t.advanced.fullscreen || t.advanced.allow_mobile)" class="task-flags">
+                                        <Tag v-if="t.advanced.ai_check" value="AI check" icon="pi pi-sparkles" severity="info" />
+                                        <Tag v-if="t.advanced.camera" value="Camera" icon="pi pi-camera" severity="warn" />
+                                        <Tag v-if="t.advanced.fullscreen" value="Fullscreen" icon="pi pi-window-maximize" severity="warn" />
+                                        <Tag v-if="t.advanced.allow_mobile" value="Mobile OK" icon="pi pi-mobile" />
+                                    </div>
+                                    <div class="task-cta">
+                                        <Button v-if="canManageTasks" label="Submissions" icon="pi pi-list-check" size="small" outlined @click="openSubs(t)" />
+                                        <template v-else>
+                                            <Tag v-if="t.my_status === 'submitted'" value="Submitted" icon="pi pi-check" severity="success" />
+                                            <Button v-else :label="t.questions_count ? 'Answer' : 'Open'" icon="pi pi-pencil" size="small" @click="openExam(t)" />
+                                        </template>
+                                    </div>
+                                </div>
+                                <span v-if="canManageTasks" class="mod-tools">
+                                    <Button :icon="t.is_archived ? 'pi pi-undo' : 'pi pi-inbox'" text rounded size="small" :title="t.is_archived ? 'Restore' : 'Archive'" @click="archiveTask(t)" />
+                                    <Button icon="pi pi-trash" text rounded size="small" severity="danger" title="Delete" @click="deleteTask(t)" />
+                                </span>
+                            </div>
+                            <p v-if="!tasks.length" class="empty">No tasks yet.</p>
+                        </div>
                     </TabPanel>
                     <TabPanel value="4">
                         <div class="chat">
@@ -691,28 +1016,171 @@ onMounted(load);
                 </template>
             </Dialog>
 
-            <Dialog v-model:visible="showModule" modal header="Add New Module" :style="{ width: '520px' }">
+            <Dialog v-model:visible="showModule" modal header="Add New Module" :style="{ width: '560px' }">
                 <div class="form">
                     <label>Description<Textarea v-model="moduleForm.description" rows="3" autoResize placeholder="What is this module about?" /></label>
                     <div class="cover-field">
-                        <span>File</span>
-                        <div v-if="moduleForm.file_url" class="mod-preview">
-                            <img v-if="isImageFile(moduleForm.file_mime)" :src="moduleForm.file_url" alt="preview" />
-                            <iframe v-else-if="isPdfFile(moduleForm.file_mime)" :src="moduleForm.file_url" title="preview"></iframe>
-                            <div v-else class="mod-preview-file"><i class="pi pi-file"></i><span>{{ moduleForm.file_name }}</span></div>
-                            <div class="mod-preview-meta">{{ moduleForm.file_name }} · {{ prettySize(moduleForm.file_size) }}</div>
+                        <span>Files (preview before posting)</span>
+                        <div v-if="moduleForm.files.length" class="mod-preview-grid">
+                            <div v-for="(f, i) in moduleForm.files" :key="i" class="mod-preview">
+                                <button class="thumb-x" @click="removeModuleFile(i)"><i class="pi pi-times"></i></button>
+                                <img v-if="isImageFile(f.mime)" :src="f.url" alt="preview" />
+                                <iframe v-else-if="isPdfFile(f.mime)" :src="f.url" title="preview"></iframe>
+                                <div v-else class="mod-preview-file"><i class="pi pi-file"></i><span>{{ f.name }}</span></div>
+                                <div class="mod-preview-meta">{{ f.name }} · {{ prettySize(f.size) }}</div>
+                            </div>
                         </div>
                         <div class="cover-actions">
-                            <Button :label="uploadingModule ? 'Uploading…' : (moduleForm.file_url ? 'Replace file' : 'Choose file')" icon="pi pi-upload" size="small" outlined :loading="uploadingModule" @click="moduleInput.click()" />
-                            <Button v-if="moduleForm.file_url" label="Remove" icon="pi pi-times" size="small" text severity="danger" @click="moduleForm.file_url = ''; moduleForm.file_name = ''; moduleForm.file_mime = ''; moduleForm.file_size = 0" />
+                            <Button :label="uploadingModule ? 'Uploading…' : 'Add files'" icon="pi pi-upload" size="small" outlined :loading="uploadingModule" @click="moduleInput.click()" />
                         </div>
-                        <input ref="moduleInput" type="file" class="hidden-input" @change="onModuleFile" />
+                        <input ref="moduleInput" type="file" multiple class="hidden-input" @change="onModuleFile" />
                     </div>
                 </div>
                 <template #footer>
                     <Button label="Cancel" text @click="showModule = false" />
                     <Button label="Post Module" icon="pi pi-send" :loading="savingModule" :disabled="!moduleForm.description.trim() || uploadingModule" @click="saveModule" />
                 </template>
+            </Dialog>
+
+            <Dialog v-model:visible="showTask" modal :header="taskStep === 1 ? 'New Task — Details' : 'New Task — Questions'" :style="{ width: '640px' }">
+                <template v-if="taskStep === 1">
+                    <div class="task-tabs">
+                        <button :class="{ on: taskTab === 'basic' }" @click="taskTab = 'basic'">Basic</button>
+                        <button :class="{ on: taskTab === 'advanced' }" @click="taskTab = 'advanced'">Advanced</button>
+                    </div>
+
+                    <div v-show="taskTab === 'basic'" class="form">
+                        <label>Name of Task<InputText v-model="taskForm.name" placeholder="e.g. Chapter 3 Quiz" /></label>
+                        <label>Type of Task<Select v-model="taskForm.type" :options="taskTypeOptions" optionLabel="label" optionValue="value" /></label>
+                        <label>Description<Textarea v-model="taskForm.description" rows="2" autoResize placeholder="Optional instructions…" /></label>
+                        <label>Deadline<Select v-model="taskForm.deadline_type" :options="deadlineOptions" optionLabel="label" optionValue="value" /></label>
+                        <div v-if="taskForm.deadline_type === 'custom'" class="task-range">
+                            <label>Start<DatePicker v-model="taskForm.deadline_at" showTime hourFormat="12" /></label>
+                            <label>End<DatePicker v-model="taskForm.deadline_end" showTime hourFormat="12" /></label>
+                        </div>
+                        <label v-if="isExam">Exam Duration / Time<Select v-model="taskForm.duration" :options="durationOptions" optionLabel="label" optionValue="value" placeholder="Select duration" /></label>
+                        <label>Who can view?<Select v-model="taskForm.visibility" :options="visibilityOptions" optionLabel="label" optionValue="value" /></label>
+                        <label v-if="taskForm.visibility === 'specific'">Specific members<MultiSelect v-model="taskForm.visible_members" :options="memberOptions" optionLabel="label" optionValue="value" filter placeholder="Select members" display="chip" /></label>
+                    </div>
+
+                    <div v-show="taskTab === 'advanced'" class="form">
+                        <p class="adv-note">Advanced options apply mainly to exams.</p>
+                        <div class="toggle-row"><span>Let AI check the exam<small>Detects similar answers and scores essays/identification.</small></span><ToggleSwitch v-model="taskForm.advanced.ai_check" /></div>
+                        <div class="toggle-row"><span>Allow mobile (iOS / Android)</span><ToggleSwitch v-model="taskForm.advanced.allow_mobile" /></div>
+                        <div class="toggle-row"><span>Require fullscreen</span><ToggleSwitch v-model="taskForm.advanced.fullscreen" /></div>
+                        <template v-if="taskForm.advanced.fullscreen">
+                            <div class="toggle-row sub"><span>Check for exiting fullscreen</span><ToggleSwitch v-model="taskForm.advanced.fs_exit" /></div>
+                            <div class="toggle-row sub"><span>Check for keyboard shortcuts</span><ToggleSwitch v-model="taskForm.advanced.fs_shortcuts" /></div>
+                        </template>
+                        <div class="toggle-row"><span>Exam with camera open</span><ToggleSwitch v-model="taskForm.advanced.camera" /></div>
+                    </div>
+                </template>
+
+                <template v-else>
+                    <div class="questions">
+                        <div v-for="(q, qi) in taskForm.questions" :key="qi" class="q-card">
+                            <div class="q-head">
+                                <strong>Question {{ qi + 1 }}</strong>
+                                <Button icon="pi pi-times" text rounded size="small" severity="danger" title="Delete Question" @click="removeQuestion(qi)" />
+                            </div>
+                            <InputText v-model="q.name" placeholder="Question name / prompt" />
+                            <Select v-model="q.type" :options="questionTypeOptions" optionLabel="label" optionValue="value" @change="ensureOptions(q)" />
+                            <div v-if="hasOptions(q)" class="q-options">
+                                <div v-for="(o, oi) in q.options" :key="oi" class="q-option">
+                                    <RadioButton v-if="q.type === 'radio'" :modelValue="o.correct" :value="true" @update:modelValue="markCorrect(q, oi)" />
+                                    <Checkbox v-else :modelValue="o.correct" binary @update:modelValue="markCorrect(q, oi)" />
+                                    <InputText v-model="o.text" :placeholder="`Option ${oi + 1}`" />
+                                    <Button icon="pi pi-times" text rounded size="small" :disabled="q.options.length <= 1" @click="removeOption(q, oi)" />
+                                </div>
+                                <Button label="Add option" icon="pi pi-plus" text size="small" @click="addOption(q)" />
+                            </div>
+                            <p v-else class="q-hint">{{ q.type === 'code' ? 'Students will submit code.' : 'Students will type a free-text answer.' }}</p>
+                        </div>
+                        <Button label="Add New Question" icon="pi pi-plus" outlined @click="addQuestion" />
+                        <p v-if="!taskForm.questions.length" class="empty">No questions yet. Add one to get started.</p>
+                    </div>
+                </template>
+
+                <template #footer>
+                    <Button label="Cancel" text @click="showTask = false" />
+                    <Button v-if="taskStep === 2" label="Back" icon="pi pi-arrow-left" text @click="taskStep = 1" />
+                    <Button v-if="taskStep === 1" label="Next: Questions" icon="pi pi-arrow-right" iconPos="right" :disabled="!taskForm.name.trim()" @click="taskStep = 2" />
+                    <Button v-else label="Create Task" icon="pi pi-check" :loading="savingTask" @click="saveTask" />
+                </template>
+            </Dialog>
+
+            <Dialog v-model:visible="showExam" modal :closable="false" :header="examTask?.name || 'Task'" :style="{ width: '680px' }">
+                <div v-if="examTask" class="exam">
+                    <div v-if="examTask.advanced && (examTask.advanced.fullscreen || examTask.advanced.camera || examTask.advanced.fs_exit || examTask.advanced.fs_shortcuts)" class="exam-proctor">
+                        <i class="pi pi-shield"></i>
+                        <span>This task is proctored. Activity such as leaving fullscreen, keyboard shortcuts, tab switching and refreshing is logged for your teacher.</span>
+                    </div>
+                    <p v-if="examTask.description" class="exam-desc">{{ examTask.description }}</p>
+
+                    <div v-if="examSubmitted" class="exam-done">
+                        <i class="pi pi-check-circle"></i>
+                        <p>You have submitted this task. Your answers are locked.</p>
+                    </div>
+
+                    <div v-for="(q, qi) in examTask.questions" :key="qi" class="exam-q">
+                        <div class="exam-q-head"><strong>{{ qi + 1 }}. {{ q.name || 'Untitled question' }}</strong><Tag :value="q.type" class="cap" severity="secondary" /></div>
+
+                        <div v-if="q.type === 'radio'" class="exam-opts">
+                            <label v-for="(o, oi) in q.options" :key="oi" class="exam-opt">
+                                <RadioButton v-model="examAnswers[qi]" :value="o.text" :disabled="examSubmitted" />
+                                <span>{{ o.text }}</span>
+                            </label>
+                        </div>
+                        <div v-else-if="q.type === 'checkbox'" class="exam-opts">
+                            <label v-for="(o, oi) in q.options" :key="oi" class="exam-opt">
+                                <Checkbox v-model="examAnswers[qi]" :value="o.text" :disabled="examSubmitted" />
+                                <span>{{ o.text }}</span>
+                            </label>
+                        </div>
+                        <Textarea v-else v-model="examAnswers[qi]" :rows="q.type === 'code' ? 6 : 3" autoResize :disabled="examSubmitted"
+                            :class="{ 'code-area': q.type === 'code' }" :placeholder="q.type === 'code' ? 'Write your code…' : 'Your answer…'" />
+                    </div>
+
+                    <p v-if="!examTask.questions || !examTask.questions.length" class="empty">This task has no questions.</p>
+                </div>
+                <template #footer>
+                    <Button :label="examSubmitted ? 'Close' : 'Save & Close'" text @click="closeExam" />
+                    <Button v-if="!examSubmitted" label="Submit" icon="pi pi-send" :loading="examSubmitting" @click="submitExam" />
+                </template>
+            </Dialog>
+
+            <Dialog v-model:visible="showSubs" modal :header="`Submissions — ${subsTask?.name || ''}`" :style="{ width: '720px' }">
+                <p v-if="loadingSubs">Loading…</p>
+                <template v-else>
+                    <p v-if="!subs.length" class="empty">No submissions yet.</p>
+                    <div v-for="s in subs" :key="s.id" class="sub-card">
+                        <div class="sub-head">
+                            <UserAvatar :src="s.avatar_url" :name="s.student" :size="34" />
+                            <div class="sub-by"><strong>{{ s.student }}</strong><span>{{ s.status === 'submitted' ? ('Submitted ' + (s.submitted_at || '')) : 'In progress' }}</span></div>
+                            <Tag v-if="s.objective_total" :value="`${s.score ?? 0}/${s.objective_total}`" severity="success" />
+                            <Tag :value="s.status" :severity="s.status === 'submitted' ? 'success' : 'secondary'" />
+                        </div>
+
+                        <div v-if="s.logs && s.logs.length" class="sub-logs">
+                            <strong class="sub-logs-title"><i class="pi pi-flag"></i> Activity logs ({{ s.logs.length }})</strong>
+                            <div class="sub-log" v-for="(l, li) in s.logs" :key="li">
+                                <Tag :value="(logMeta[l.type] || {}).label || l.type" :icon="(logMeta[l.type] || {}).icon" :severity="(logMeta[l.type] || {}).sev || 'secondary'" />
+                                <span v-if="l.detail" class="sub-log-detail">{{ l.detail }}</span>
+                                <span class="sub-log-time">{{ fmtTime(l.at) }}</span>
+                            </div>
+                        </div>
+                        <p v-else class="sub-clean"><i class="pi pi-check"></i> No flagged activity.</p>
+
+                        <div class="sub-answers">
+                            <strong class="sub-logs-title"><i class="pi pi-list"></i> Answers</strong>
+                            <div v-for="(q, qi) in (subsTask.questions || [])" :key="qi" class="sub-answer">
+                                <span class="sa-q">{{ qi + 1 }}. {{ q.name || 'Question' }}</span>
+                                <span class="sa-a">{{ answerText(s.answers[qi] ?? s.answers[String(qi)]) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <template #footer><Button label="Close" text @click="showSubs = false" /></template>
             </Dialog>
         </template>
     </div>
@@ -724,6 +1192,9 @@ onMounted(load);
 .cd-hero { border-left: 5px solid var(--accent); padding: 0.25rem 0 0.25rem 1rem; margin-bottom: 1.25rem; }
 .cd-hero h1 { margin: 0; font-size: 1.6rem; }
 .cd-hero p { margin: 0.25rem 0 0; color: var(--muted-text); }
+.cd-hero.has-cover { border-left: none; border-radius: 14px; padding: 1.75rem 1.5rem; background-size: cover; background-position: center; color: #fff; box-shadow: 0 4px 18px rgba(0,0,0,0.25); }
+.cd-hero.has-cover h1 { color: #fff; font-size: 1.9rem; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+.cd-hero.has-cover p { color: rgba(255,255,255,0.85); text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
 .cap { text-transform: capitalize; }
 .feed { display: flex; flex-direction: column; gap: 1rem; padding-top: 1rem; max-width: 100%; }
 .field-label, .feed-label { font-weight: 600; font-size: 0.95rem; }
@@ -807,11 +1278,79 @@ onMounted(load);
 .mod-by span { font-size: 0.75rem; color: var(--muted-text); }
 .mod-tools { display: flex; gap: 0.2rem; }
 .mod-desc { margin: 0; white-space: pre-wrap; }
-.mod-file { display: flex; align-items: center; gap: 0.75rem; border: 1px solid var(--surface-border); border-radius: 10px; padding: 0.5rem 0.75rem; text-decoration: none; color: inherit; }
+.mod-files { display: flex; flex-direction: column; gap: 0.5rem; }
+.mod-file { display: flex; align-items: center; gap: 0.75rem; border: 1px solid var(--surface-border); border-radius: 10px; padding: 0.5rem 0.75rem; text-decoration: none; color: inherit; position: relative; }
+.mod-file-hover { margin-left: auto; opacity: 0; transition: opacity 0.15s; }
+.mod-file:hover .mod-file-hover { opacity: 1; }
 .mod-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
 .mod-file-icon { width: 48px; height: 48px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-100, rgba(0,0,0,0.05)); font-size: 1.4rem; }
-.mod-file-meta { display: flex; flex-direction: column; flex: 1; }
+.mod-file-meta { display: flex; flex-direction: column; }
 .mod-file-meta span { font-size: 0.75rem; color: var(--muted-text); }
+
+/* Post composer thumbnails */
+.post-thumbs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.post-thumb { position: relative; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1px solid var(--surface-border); }
+.post-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumb-x { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(0,0,0,0.6); color: #fff; cursor: pointer; display: grid; place-items: center; font-size: 0.7rem; z-index: 2; }
+.composer-foot { display: flex; justify-content: flex-end; gap: 0.5rem; align-items: center; }
+
+/* Tasks */
+.task-card { display: flex; gap: 0.85rem; border: 1px solid var(--surface-border); border-radius: 12px; padding: 0.9rem; align-items: flex-start; }
+.task-card.archived { opacity: 0.6; }
+.task-icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: #fff; flex-shrink: 0; font-size: 1.1rem; }
+.task-main { flex: 1; display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.task-top { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.task-desc { margin: 0; color: var(--muted-text); font-size: 0.9rem; }
+.task-meta { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted-text); }
+.task-meta i { margin-right: 0.25rem; }
+.task-flags { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.task-cta { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
+
+/* Exam taking */
+.exam { display: flex; flex-direction: column; gap: 1rem; }
+.exam-proctor { display: flex; gap: 0.6rem; align-items: flex-start; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.35); border-radius: 10px; padding: 0.7rem 0.85rem; font-size: 0.85rem; }
+.exam-proctor i { color: #ef4444; margin-top: 0.1rem; }
+.exam-desc { margin: 0; color: var(--muted-text); }
+.exam-done { display: flex; gap: 0.6rem; align-items: center; background: rgba(16,185,129,0.1); border-radius: 10px; padding: 0.7rem 0.85rem; }
+.exam-done i { color: #10b981; font-size: 1.3rem; }
+.exam-done p { margin: 0; }
+.exam-q { border: 1px solid var(--surface-border); border-radius: 10px; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.exam-q-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.exam-opts { display: flex; flex-direction: column; gap: 0.5rem; }
+.exam-opt { display: flex; align-items: center; gap: 0.6rem; cursor: pointer; }
+.exam-q :deep(.code-area) { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.exam-q :deep(.p-textarea) { width: 100%; }
+
+/* Submissions (teacher) */
+.sub-card { border: 1px solid var(--surface-border); border-radius: 12px; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 0.85rem; }
+.sub-head { display: flex; align-items: center; gap: 0.6rem; }
+.sub-by { display: flex; flex-direction: column; flex: 1; }
+.sub-by span { font-size: 0.75rem; color: var(--muted-text); }
+.sub-logs, .sub-answers { display: flex; flex-direction: column; gap: 0.4rem; }
+.sub-logs-title { font-size: 0.8rem; color: var(--muted-text); }
+.sub-log { display: flex; align-items: center; gap: 0.6rem; font-size: 0.8rem; }
+.sub-log-detail { font-family: ui-monospace, monospace; color: var(--muted-text); }
+.sub-log-time { margin-left: auto; font-size: 0.72rem; color: var(--muted-text); }
+.sub-clean { margin: 0; font-size: 0.82rem; color: #10b981; }
+.sub-answer { display: flex; flex-direction: column; gap: 0.1rem; border-left: 3px solid var(--surface-border); padding-left: 0.6rem; }
+.sa-q { font-size: 0.82rem; font-weight: 600; }
+.sa-a { font-size: 0.85rem; color: var(--muted-text); white-space: pre-wrap; }
+.task-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--surface-border); margin-bottom: 1rem; }
+.task-tabs button { background: none; border: none; padding: 0.6rem 1rem; cursor: pointer; color: var(--muted-text); font-weight: 600; border-bottom: 2px solid transparent; }
+.task-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.task-range { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.adv-note { margin: 0 0 0.25rem; font-size: 0.8rem; color: var(--muted-text); }
+.toggle-row small { display: block; font-weight: 400; font-size: 0.75rem; color: var(--muted-text); }
+.toggle-row.sub { padding-left: 1rem; }
+.questions { display: flex; flex-direction: column; gap: 0.85rem; }
+.q-card { border: 1px solid var(--surface-border); border-radius: 10px; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.q-head { display: flex; align-items: center; justify-content: space-between; }
+.q-options { display: flex; flex-direction: column; gap: 0.4rem; padding-left: 0.25rem; }
+.q-option { display: flex; align-items: center; gap: 0.5rem; }
+.q-option :deep(.p-inputtext) { flex: 1; }
+.q-hint { margin: 0; font-size: 0.8rem; color: var(--muted-text); font-style: italic; }
+.mod-preview-grid { display: flex; flex-direction: column; gap: 0.6rem; }
+.mod-preview { position: relative; }
 
 /* Module preview */
 .mod-preview { border: 1px solid var(--surface-border); border-radius: 10px; overflow: hidden; }

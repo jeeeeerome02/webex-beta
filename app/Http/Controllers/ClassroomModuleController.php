@@ -49,30 +49,33 @@ class ClassroomModuleController extends Controller
 
         $data = $request->validate([
             'description' => ['required', 'string', 'max:5000'],
-            'file_url' => ['nullable', 'string', 'max:1000'],
-            'file_name' => ['nullable', 'string', 'max:255'],
-            'file_mime' => ['nullable', 'string', 'max:120'],
-            'file_size' => ['nullable', 'integer'],
+            'files' => ['nullable', 'array', 'max:20'],
+            'files.*.url' => ['required_with:files', 'string', 'max:1000'],
+            'files.*.name' => ['nullable', 'string', 'max:255'],
+            'files.*.mime' => ['nullable', 'string', 'max:120'],
+            'files.*.size' => ['nullable', 'integer'],
         ]);
+
+        $files = collect($data['files'] ?? [])->map(fn ($f) => [
+            'url' => $f['url'],
+            'name' => $f['name'] ?? 'Attachment',
+            'mime' => $f['mime'] ?? null,
+            'size' => $f['size'] ?? null,
+        ])->values()->all();
 
         $module = $classroom->modules()->create([
             'user_id' => $user->id,
             'description' => $data['description'],
-            'file_url' => $data['file_url'] ?? null,
-            'file_name' => $data['file_name'] ?? null,
-            'file_mime' => $data['file_mime'] ?? null,
-            'file_size' => $data['file_size'] ?? null,
+            'files' => $files,
         ]);
 
         // Mirror to the class timeline.
-        $fileLink = $module->file_url
-            ? '<p><a href="'.e($module->file_url).'" target="_blank" rel="noopener"><i class="pi pi-paperclip"></i> '.e($module->file_name ?: 'Attachment').'</a></p>'
-            : '';
+        $fileLinks = collect($files)->map(fn ($f) => '<p><a href="'.e($f['url']).'" target="_blank" rel="noopener"><i class="pi pi-paperclip"></i> '.e($f['name']).'</a></p>')->implode('');
         $classroom->posts()->create([
             'user_id' => $user->id,
             'kind' => 'module',
             'body' => '<p><i class="pi pi-folder-open"></i> <strong>New module</strong></p>'.
-                '<p>'.nl2br(e($module->description)).'</p>'.$fileLink,
+                '<p>'.nl2br(e($module->description)).'</p>'.$fileLinks,
         ]);
 
         return response()->json(['module' => $this->serialize($module->load('author'))], 201);
@@ -96,8 +99,10 @@ class ClassroomModuleController extends Controller
 
         $module = $classroom->modules()->findOrFail($id);
 
-        if ($module->file_url && str_starts_with($module->file_url, '/storage/')) {
-            Storage::disk('public')->delete(str_replace('/storage/', '', $module->file_url));
+        foreach (($module->files ?? []) as $f) {
+            if (! empty($f['url']) && str_starts_with($f['url'], '/storage/')) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $f['url']));
+            }
         }
 
         $module->delete();
@@ -110,10 +115,7 @@ class ClassroomModuleController extends Controller
         return [
             'id' => $m->id,
             'description' => $m->description,
-            'file_url' => $m->file_url,
-            'file_name' => $m->file_name,
-            'file_mime' => $m->file_mime,
-            'file_size' => $m->file_size,
+            'files' => $m->files ?? [],
             'author' => $m->author?->name,
             'avatar_url' => $m->author?->avatar(),
             'is_archived' => (bool) $m->archived_at,

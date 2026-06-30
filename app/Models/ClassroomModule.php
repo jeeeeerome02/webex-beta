@@ -11,6 +11,7 @@ class ClassroomModule extends Model
         'classroom_id',
         'user_id',
         'description',
+        'files',
         'file_url',
         'file_name',
         'file_mime',
@@ -19,6 +20,7 @@ class ClassroomModule extends Model
     ];
 
     protected $casts = [
+        'files' => 'array',
         'archived_at' => 'datetime',
     ];
 

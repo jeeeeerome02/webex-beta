@@ -6,6 +6,7 @@ use App\Http\Controllers\ClassroomChatController;
 use App\Http\Controllers\ClassroomController;
 use App\Http\Controllers\ClassroomModuleController;
 use App\Http\Controllers\ClassroomPostController;
+use App\Http\Controllers\ClassroomTaskController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UploadController;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +57,15 @@ Route::middleware('jwt.cookie')->group(function () {
     Route::post('/api/classrooms/{token}/modules', [ClassroomModuleController::class, 'store']);
     Route::post('/api/classrooms/{token}/modules/{id}/archive', [ClassroomModuleController::class, 'archive']);
     Route::delete('/api/classrooms/{token}/modules/{id}', [ClassroomModuleController::class, 'destroy']);
+
+    Route::get('/api/classrooms/{token}/tasks', [ClassroomTaskController::class, 'index']);
+    Route::post('/api/classrooms/{token}/tasks', [ClassroomTaskController::class, 'store']);
+    Route::post('/api/classrooms/{token}/tasks/{id}/archive', [ClassroomTaskController::class, 'archive']);
+    Route::delete('/api/classrooms/{token}/tasks/{id}', [ClassroomTaskController::class, 'destroy']);
+    Route::get('/api/classrooms/{token}/tasks/{id}/submission', [ClassroomTaskController::class, 'mySubmission']);
+    Route::post('/api/classrooms/{token}/tasks/{id}/submission', [ClassroomTaskController::class, 'saveSubmission']);
+    Route::post('/api/classrooms/{token}/tasks/{id}/submit', [ClassroomTaskController::class, 'submitSubmission']);
+    Route::get('/api/classrooms/{token}/tasks/{id}/submissions', [ClassroomTaskController::class, 'submissions']);
 
     Route::get('/api/classrooms/{token}/messages', [ClassroomChatController::class, 'index']);
     Route::post('/api/classrooms/{token}/messages', [ClassroomChatController::class, 'store']);
