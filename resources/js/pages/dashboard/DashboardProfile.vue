@@ -52,9 +52,17 @@ const onFile = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 25 * 1024 * 1024) { alert('Max 25MB.'); return; }
-    const reader = new FileReader();
-    reader.onload = async () => { user.value[target.value] = reader.result; showPicker.value = false; await save(); };
-    reader.readAsDataURL(file);
+    saving.value = true;
+    const form = new FormData();
+    form.append('file', file);
+    axios.post('/api/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+        .then(async ({ data }) => {
+            user.value[target.value] = data.url;
+            showPicker.value = false;
+            await save();
+        })
+        .catch(() => alert('Upload failed. Please try a smaller file.'))
+        .finally(() => { saving.value = false; e.target.value = ''; });
 };
 
 const save = async () => {

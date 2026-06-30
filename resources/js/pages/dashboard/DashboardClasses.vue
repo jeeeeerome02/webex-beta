@@ -14,6 +14,7 @@ const router = useRouter();
 const user = ref(null);
 const owned = ref([]);
 const joined = ref([]);
+const archived = ref([]);
 const loading = ref(true);
 const showForm = ref(false);
 const saving = ref(false);
@@ -21,11 +22,37 @@ const editingToken = ref(null);
 const copiedId = ref(null);
 const error = ref('');
 const view = ref(localStorage.getItem('classesView') || 'grid');
+const sort = ref('all');
+const coverInput = ref(null);
+const uploadingCover = ref(false);
 const menu = ref(null);
 const menuClass = ref(null);
 
 const isTeacher = computed(() => user.value?.role === 'teacher');
 const dialogTitle = computed(() => (editingToken.value ? 'Edit Class' : 'Create Class'));
+
+const sortOptions = [
+    { label: 'All', value: 'all' },
+    { label: 'Latest', value: 'latest' },
+    { label: 'Oldest', value: 'oldest' },
+    { label: 'Alphabetically (A-Z)', value: 'az' },
+    { label: 'Alphabetically (Z-A)', value: 'za' },
+    { label: 'Archived', value: 'archived' },
+];
+
+const applySort = (list) => {
+    const arr = [...list];
+    if (sort.value === 'latest') arr.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    else if (sort.value === 'oldest') arr.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    else if (sort.value === 'az') arr.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort.value === 'za') arr.sort((a, b) => b.name.localeCompare(a.name));
+    return arr;
+};
+
+const showArchived = computed(() => sort.value === 'archived');
+const displayOwned = computed(() => (showArchived.value ? [] : applySort(owned.value)));
+const displayJoined = computed(() => (showArchived.value ? [] : applySort(joined.value)));
+const displayArchived = computed(() => applySort(archived.value));
 
 const presets = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
@@ -35,6 +62,7 @@ const form = ref({
     course_type: '',
     theme_color: '#4f46e5',
     type: 'public',
+    cover_image: '',
 });
 
 const typeOptions = [
@@ -47,7 +75,9 @@ const inviteUrl = (token) => `${window.location.origin}/class/${token}`;
 const menuItems = computed(() => [
     { label: 'Copy Invite Link', icon: 'pi pi-link', command: () => copyInvite(menuClass.value) },
     { label: 'Edit', icon: 'pi pi-pencil', command: () => editClass(menuClass.value) },
-    { label: 'Archive', icon: 'pi pi-inbox', command: () => archiveClass(menuClass.value) },
+    menuClass.value?.is_archived
+        ? { label: 'Restore', icon: 'pi pi-undo', command: () => archiveClass(menuClass.value) }
+        : { label: 'Archive', icon: 'pi pi-inbox', command: () => archiveClass(menuClass.value) },
 ]);
 
 const setView = (v) => {
@@ -65,6 +95,7 @@ const load = async () => {
         user.value = me.data.user;
         owned.value = classes.data.owned;
         joined.value = classes.data.joined;
+        archived.value = classes.data.archived || [];
     } catch {
         error.value = 'Failed to load classes.';
     } finally {
@@ -86,7 +117,7 @@ const createClass = async () => {
         }
         showForm.value = false;
         editingToken.value = null;
-        form.value = { name: '', description: '', course_type: '', theme_color: '#4f46e5', type: 'public' };
+        form.value = { name: '', description: '', course_type: '', theme_color: '#4f46e5', type: 'public', cover_image: '' };
     } catch (e) {
         error.value = e.response?.data?.message || 'Could not save class.';
     } finally {
@@ -96,20 +127,34 @@ const createClass = async () => {
 
 const openCreate = () => {
     editingToken.value = null;
-    form.value = { name: '', description: '', course_type: '', theme_color: '#4f46e5', type: 'public' };
+    form.value = { name: '', description: '', course_type: '', theme_color: '#4f46e5', type: 'public', cover_image: '' };
     showForm.value = true;
 };
 
 const editClass = (c) => {
     editingToken.value = c.invite_token;
-    form.value = { name: c.name, description: c.description || '', course_type: c.course_type || '', theme_color: c.theme_color, type: c.type };
+    form.value = { name: c.name, description: c.description || '', course_type: c.course_type || '', theme_color: c.theme_color, type: c.type, cover_image: c.cover_image || '' };
     showForm.value = true;
 };
 
+const onCoverFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { alert('Max 25MB.'); return; }
+    uploadingCover.value = true;
+    const fd = new FormData();
+    fd.append('file', file);
+    axios.post('/api/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        .then(({ data }) => { form.value.cover_image = data.url; })
+        .catch(() => alert('Upload failed.'))
+        .finally(() => { uploadingCover.value = false; e.target.value = ''; });
+};
+
 const archiveClass = async (c) => {
-    if (!confirm(`Archive "${c.name}"?`)) return;
+    const restoring = c.is_archived;
+    if (!confirm(restoring ? `Restore "${c.name}"?` : `Archive "${c.name}"?`)) return;
     await axios.post(`/api/classrooms/${c.invite_token}/archive`);
-    owned.value = owned.value.filter((x) => x.invite_token !== c.invite_token);
+    await load();
 };
 
 const toggleMenu = (event, c) => {
@@ -136,6 +181,7 @@ onMounted(load);
                 <p>{{ isTeacher ? 'Create and manage your classes.' : 'Classes you have joined.' }}</p>
             </div>
             <div class="head-actions">
+                <Select v-model="sort" :options="sortOptions" optionLabel="label" optionValue="value" class="sort-select" />
                 <div class="view-toggle">
                     <button :class="{ on: view === 'grid' }" title="Boxes" @click="setView('grid')"><i class="pi pi-th-large"></i></button>
                     <button :class="{ on: view === 'list' }" title="List" @click="setView('list')"><i class="pi pi-bars"></i></button>
@@ -148,10 +194,11 @@ onMounted(load);
 
         <Menu ref="menu" :model="menuItems" popup />
 
-        <section v-if="isTeacher && owned.length" :class="view === 'grid' ? 'grid' : 'list'">
-            <Card v-for="c in owned" :key="c.id" class="class-card" :style="{ '--accent': c.theme_color }" @click="openClass(c)">
+        <section v-if="isTeacher && displayOwned.length" :class="view === 'grid' ? 'grid' : 'list'">
+            <Card v-for="c in displayOwned" :key="c.id" class="class-card" :style="{ '--accent': c.theme_color }" @click="openClass(c)">
                 <template #content>
-                    <div class="bar"></div>
+                    <div v-if="c.cover_image" class="cover-img" :style="{ backgroundImage: `url(${c.cover_image})` }"></div>
+                    <div v-else class="bar"></div>
                     <div class="card-top">
                         <div class="title-wrap">
                             <h3>{{ c.name }}</h3>
@@ -165,10 +212,11 @@ onMounted(load);
             </Card>
         </section>
 
-        <section v-if="joined.length" :class="view === 'grid' ? 'grid' : 'list'">
-            <Card v-for="c in joined" :key="c.id" class="class-card" :style="{ '--accent': c.theme_color }" @click="openClass(c)">
+        <section v-if="displayJoined.length" :class="view === 'grid' ? 'grid' : 'list'">
+            <Card v-for="c in displayJoined" :key="c.id" class="class-card" :style="{ '--accent': c.theme_color }" @click="openClass(c)">
                 <template #content>
-                    <div class="bar"></div>
+                    <div v-if="c.cover_image" class="cover-img" :style="{ backgroundImage: `url(${c.cover_image})` }"></div>
+                    <div v-else class="bar"></div>
                     <div class="card-top">
                         <div class="title-wrap">
                             <h3>{{ c.name }}</h3>
@@ -181,7 +229,29 @@ onMounted(load);
             </Card>
         </section>
 
-        <p v-if="!loading && !owned.length && !joined.length" class="empty">
+        <section v-if="showArchived">
+            <h3 class="arch-title">Archived classes</h3>
+            <div v-if="displayArchived.length" :class="view === 'grid' ? 'grid' : 'list'">
+                <Card v-for="c in displayArchived" :key="c.id" class="class-card archived" :style="{ '--accent': c.theme_color }">
+                    <template #content>
+                        <div v-if="c.cover_image" class="cover-img" :style="{ backgroundImage: `url(${c.cover_image})` }"></div>
+                        <div v-else class="bar"></div>
+                        <div class="card-top">
+                            <div class="title-wrap">
+                                <h3>{{ c.name }}</h3>
+                                <span class="type">{{ c.type }}<template v-if="c.course_type"> · {{ c.course_type }}</template></span>
+                            </div>
+                            <Button icon="pi pi-ellipsis-v" text rounded size="small" @click.stop="toggleMenu($event, c)" />
+                        </div>
+                        <p class="desc">{{ c.description || 'No description' }}</p>
+                        <Button label="Restore" icon="pi pi-undo" size="small" outlined @click="archiveClass(c)" />
+                    </template>
+                </Card>
+            </div>
+            <p v-else class="empty">No archived classes.</p>
+        </section>
+
+        <p v-if="!loading && !showArchived && !displayOwned.length && !displayJoined.length" class="empty">
             {{ isTeacher ? 'No classes yet. Create your first class.' : 'You have not joined any classes yet.' }}
         </p>
 
@@ -196,6 +266,17 @@ onMounted(load);
                     <div class="swatches">
                         <button v-for="p in presets" :key="p" class="swatch" :class="{ on: form.theme_color === p }"
                             :style="{ background: p }" @click="form.theme_color = p"></button>
+                    </div>
+                </div>
+                <div class="colors">
+                    <span>Cover image (optional)</span>
+                    <div class="cover-row">
+                        <div class="cover-preview" :style="form.cover_image ? { backgroundImage: `url(${form.cover_image})` } : { background: form.theme_color }"></div>
+                        <div class="cover-actions">
+                            <Button :label="uploadingCover ? 'Uploading…' : 'Upload image'" icon="pi pi-image" size="small" outlined :loading="uploadingCover" @click="coverInput.click()" />
+                            <Button v-if="form.cover_image" label="Remove" icon="pi pi-times" size="small" text severity="danger" @click="form.cover_image = ''" />
+                        </div>
+                        <input ref="coverInput" type="file" accept="image/*" class="hidden-input" @change="onCoverFile" />
                     </div>
                 </div>
                 <p v-if="error" class="err">{{ error }}</p>
@@ -225,6 +306,15 @@ onMounted(load);
 .class-card { cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease; }
 .class-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
 .bar { height: 6px; border-radius: 6px; background: var(--accent); margin-bottom: 0.25rem; }
+.cover-img { height: 90px; border-radius: 10px; background-size: cover; background-position: center; margin-bottom: 0.4rem; }
+.list .cover-img { height: 40px; width: 60px; flex-shrink: 0; margin: 0; }
+.arch-title { margin: 0 0 1rem; }
+.class-card.archived { opacity: 0.85; }
+.sort-select { min-width: 170px; }
+.cover-row { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.4rem; }
+.cover-preview { width: 90px; height: 54px; border-radius: 8px; background-size: cover; background-position: center; border: 1px solid var(--surface-border); flex-shrink: 0; }
+.cover-actions { display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-start; }
+.hidden-input { display: none; }
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; }
 .title-wrap h3 { margin: 0; font-size: 1.1rem; }
 .type { font-size: 0.75rem; color: var(--muted-text); text-transform: capitalize; }

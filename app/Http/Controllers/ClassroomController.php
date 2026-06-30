@@ -32,9 +32,17 @@ class ClassroomController extends Controller
             ->get()
             ->map(fn ($c) => $this->serialize($c, false));
 
+        $archived = $user->ownedClassrooms()
+            ->whereNotNull('archived_at')
+            ->withCount('members')
+            ->latest('archived_at')
+            ->get()
+            ->map(fn ($c) => $this->serialize($c, true));
+
         return response()->json([
             'owned' => $owned,
             'joined' => $joined,
+            'archived' => $archived,
         ]);
     }
 
@@ -52,6 +60,7 @@ class ClassroomController extends Controller
             'course_type' => ['nullable', 'string', 'max:255'],
             'theme_color' => ['required', 'regex:/^#([0-9a-fA-F]{6})$/'],
             'type' => ['required', Rule::in(['public', 'private'])],
+            'cover_image' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $isPrivate = $validated['type'] === 'private';
@@ -152,9 +161,12 @@ class ClassroomController extends Controller
             return response()->json(['message' => 'Only the owner can archive this class.'], 403);
         }
 
-        $classroom->update(['archived_at' => now()]);
+        $classroom->update(['archived_at' => $classroom->archived_at ? null : now()]);
 
-        return response()->json(['message' => 'Class archived.']);
+        return response()->json([
+            'message' => $classroom->archived_at ? 'Class archived.' : 'Class restored.',
+            'archived' => (bool) $classroom->archived_at,
+        ]);
     }
 
     public function showByToken(string $token): JsonResponse
@@ -485,6 +497,8 @@ class ClassroomController extends Controller
             'allow_posts' => (bool) $c->allow_posts,
             'members_count' => $c->members_count ?? 0,
             'is_owner' => $owner,
+            'is_archived' => (bool) $c->archived_at,
+            'created_at' => $c->created_at?->toIso8601String(),
         ];
     }
 }

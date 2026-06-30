@@ -54,7 +54,32 @@ const showCoTeacherAlert = ref(false);
 const showLeaveConfirm = ref(false);
 const showAward = ref(false);
 const awardForm = ref({ label: '', icon: 'pi pi-star' });
-const awardIcons = ['pi pi-star', 'pi pi-trophy', 'pi pi-thumbs-up', 'pi pi-bolt', 'pi pi-heart', 'pi pi-crown'];
+const awardIcons = [
+    'pi pi-star', 'pi pi-star-fill', 'pi pi-trophy', 'pi pi-crown', 'pi pi-thumbs-up', 'pi pi-thumbs-up-fill',
+    'pi pi-heart', 'pi pi-heart-fill', 'pi pi-bolt', 'pi pi-gift', 'pi pi-flag', 'pi pi-flag-fill',
+    'pi pi-sun', 'pi pi-moon', 'pi pi-shield', 'pi pi-verified', 'pi pi-check-circle', 'pi pi-book',
+    'pi pi-pencil', 'pi pi-graduation-cap', 'pi pi-palette', 'pi pi-camera', 'pi pi-megaphone', 'pi pi-sparkles',
+];
+
+// Modules
+const modules = ref([]);
+const canManageModules = ref(false);
+const showModule = ref(false);
+const savingModule = ref(false);
+const uploadingModule = ref(false);
+const moduleForm = ref({ description: '', file_url: '', file_name: '', file_mime: '', file_size: 0 });
+const moduleInput = ref(null);
+
+// Posts sort
+const postSort = ref('all');
+const postSortOptions = [
+    { label: 'All', value: 'all' },
+    { label: 'Posts', value: 'post' },
+    { label: 'Awards', value: 'award' },
+    { label: 'Modules', value: 'module' },
+    { label: 'Tasks', value: 'task' },
+];
+const filteredPosts = computed(() => (postSort.value === 'all' ? posts.value : posts.value.filter((p) => (p.kind || 'post') === postSort.value)));
 
 const accent = computed(() => cls.value?.theme_color || '#4f46e5');
 const isOwner = computed(() => cls.value?.is_owner);
@@ -74,7 +99,7 @@ const postMenuItems = computed(() => {
     const items = [];
     if (canPin.value) items.push({ label: activePost.value?.is_pinned ? 'Unpin post' : 'Pin post', icon: 'pi pi-thumbtack', command: () => pinPost(activePost.value) });
     items.push({ label: activePost.value?.comments_enabled ? 'Turn off comments' : 'Turn on comments', icon: 'pi pi-comment', command: () => toggleComments(activePost.value) });
-    items.push({ label: activePost.value?.is_hidden ? 'Unhide post' : 'Hide post', icon: 'pi pi-eye-slash', command: () => hidePost(activePost.value) });
+    items.push({ label: 'Delete post', icon: 'pi pi-trash', command: () => deletePost(activePost.value) });
     return items;
 });
 
@@ -98,9 +123,11 @@ const load = async () => {
             course_type: data.classroom.course_type || '', theme_color: data.classroom.theme_color,
             type: data.classroom.type, join_approval: data.classroom.join_approval,
             leave_approval: data.classroom.leave_approval, allow_posts: data.classroom.allow_posts,
+            cover_image: data.classroom.cover_image || '',
         };
         loadPosts();
         loadMessages();
+        loadModules();
     } catch (e) {
         if (e.response?.status === 403) { router.replace(`/class/${token}`); return; }
         error.value = e.response?.data?.message || 'Could not load class.';
@@ -134,17 +161,18 @@ const onEditorLoad = ({ instance }) => {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        input.onchange = () => {
+        input.onchange = async () => {
             const file = input.files[0];
             if (!file) return;
             if (file.size > 25 * 1024 * 1024) { alert('Image must be 25MB or smaller.'); return; }
-            const reader = new FileReader();
-            reader.onload = () => {
+            try {
+                const fd = new FormData();
+                fd.append('file', file);
+                const { data } = await axios.post('/api/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
                 const range = quillRef.getSelection(true);
-                quillRef.insertEmbed(range.index, 'image', reader.result);
+                quillRef.insertEmbed(range.index, 'image', data.url);
                 quillRef.setSelection(range.index + 1);
-            };
-            reader.readAsDataURL(file);
+            } catch { alert('Image upload failed.'); }
         };
         input.click();
     });
@@ -216,6 +244,12 @@ const toggleComments = async (p) => {
 const hidePost = async (p) => {
     const { data } = await axios.post(`/api/classrooms/${token}/posts/${p.id}/hide`);
     p.is_hidden = data.is_hidden;
+};
+
+const deletePost = async (p) => {
+    if (!confirm('Delete this post? This cannot be undone.')) return;
+    await axios.delete(`/api/classrooms/${token}/posts/${p.id}`);
+    posts.value = posts.value.filter((x) => x.id !== p.id);
 };
 
 const pinPost = async (p) => {
@@ -315,6 +349,89 @@ const saveSettings = async () => {
     } finally { saving.value = false; }
 };
 
+const archiveGroup = async () => {
+    if (!confirm('Archive this group? Members will lose access until you restore it.')) return;
+    await axios.post(`/api/classrooms/${token}/archive`);
+    router.push('/dashboard/classes');
+};
+
+const settingsCoverInput = ref(null);
+const uploadingSettingsCover = ref(false);
+const onSettingsCover = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { alert('Max 25MB.'); return; }
+    uploadingSettingsCover.value = true;
+    const fd = new FormData();
+    fd.append('file', file);
+    axios.post('/api/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        .then(({ data }) => { settings.value.cover_image = data.url; })
+        .catch(() => alert('Upload failed.'))
+        .finally(() => { uploadingSettingsCover.value = false; e.target.value = ''; });
+};
+
+// Module helpers
+const loadModules = async () => {
+    try {
+        const { data } = await axios.get(`/api/classrooms/${token}/modules`);
+        modules.value = data.modules;
+        canManageModules.value = data.can_manage;
+    } catch { modules.value = []; }
+};
+
+const openModule = () => {
+    moduleForm.value = { description: '', file_url: '', file_name: '', file_mime: '', file_size: 0 };
+    showModule.value = true;
+};
+
+const onModuleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { alert('Max 25MB.'); return; }
+    uploadingModule.value = true;
+    const fd = new FormData();
+    fd.append('file', file);
+    axios.post('/api/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        .then(({ data }) => {
+            moduleForm.value.file_url = data.url;
+            moduleForm.value.file_name = data.name;
+            moduleForm.value.file_mime = data.mime;
+            moduleForm.value.file_size = data.size;
+        })
+        .catch(() => alert('Upload failed.'))
+        .finally(() => { uploadingModule.value = false; e.target.value = ''; });
+};
+
+const saveModule = async () => {
+    if (!moduleForm.value.description.trim() || savingModule.value) return;
+    savingModule.value = true;
+    try {
+        const { data } = await axios.post(`/api/classrooms/${token}/modules`, moduleForm.value);
+        modules.value.unshift(data.module);
+        showModule.value = false;
+        loadPosts();
+    } finally { savingModule.value = false; }
+};
+
+const archiveModule = async (m) => {
+    const { data } = await axios.post(`/api/classrooms/${token}/modules/${m.id}/archive`);
+    m.is_archived = data.archived;
+};
+
+const deleteModule = async (m) => {
+    if (!confirm('Delete this module?')) return;
+    await axios.delete(`/api/classrooms/${token}/modules/${m.id}`);
+    modules.value = modules.value.filter((x) => x.id !== m.id);
+};
+
+const isImageFile = (mime) => (mime || '').startsWith('image/');
+const isPdfFile = (mime) => (mime || '') === 'application/pdf';
+const prettySize = (bytes) => {
+    if (!bytes) return '';
+    const kb = bytes / 1024;
+    return kb > 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB';
+};
+
 onMounted(load);
 </script>
 
@@ -351,9 +468,12 @@ onMounted(load);
                                 </template>
                             </Card>
 
-                            <h4 class="feed-label">Posts</h4>
+                            <div class="feed-bar">
+                                <h4 class="feed-label">Posts</h4>
+                                <Select v-model="postSort" :options="postSortOptions" optionLabel="label" optionValue="value" class="post-sort" />
+                            </div>
 
-                            <Card v-for="p in posts" :key="p.id" class="post" :class="{ hidden: p.is_hidden }">
+                            <Card v-for="p in filteredPosts" :key="p.id" class="post" :class="{ hidden: p.is_hidden }">
                                 <template #content>
                                     <div class="post-head">
                                         <UserAvatar :src="p.avatar_url" :name="p.author" :size="40" />
@@ -403,7 +523,7 @@ onMounted(load);
                                     </div>
                                 </template>
                             </Card>
-                            <p v-if="!posts.length" class="empty">No posts yet.</p>
+                            <p v-if="!filteredPosts.length" class="empty">No posts yet.</p>
                         </div>
                     </TabPanel>
 
@@ -445,7 +565,31 @@ onMounted(load);
                     </TabPanel>
 
                     <TabPanel value="2">
-                        <div class="ph"><i class="pi pi-book"></i><p>Modules coming soon.</p></div>
+                        <div class="modules">
+                            <div class="mod-head">
+                                <h4 class="feed-label">Modules</h4>
+                                <Button v-if="canManageModules" label="Add New Module" icon="pi pi-plus" size="small" @click="openModule" />
+                            </div>
+                            <div v-for="m in modules" :key="m.id" class="mod-card" :class="{ archived: m.is_archived }">
+                                <div class="mod-card-head">
+                                    <UserAvatar :src="m.avatar_url" :name="m.author" :size="36" />
+                                    <div class="mod-by"><strong>{{ m.author }}</strong><span>{{ m.date }}</span></div>
+                                    <Tag v-if="m.is_archived" value="archived" severity="secondary" />
+                                    <span v-if="canManageModules" class="mod-tools">
+                                        <Button :icon="m.is_archived ? 'pi pi-undo' : 'pi pi-inbox'" text rounded size="small" :title="m.is_archived ? 'Restore' : 'Archive'" @click="archiveModule(m)" />
+                                        <Button icon="pi pi-trash" text rounded size="small" severity="danger" title="Delete" @click="deleteModule(m)" />
+                                    </span>
+                                </div>
+                                <p class="mod-desc">{{ m.description }}</p>
+                                <a v-if="m.file_url" :href="m.file_url" target="_blank" class="mod-file">
+                                    <img v-if="isImageFile(m.file_mime)" :src="m.file_url" :alt="m.file_name" class="mod-thumb" />
+                                    <span v-else class="mod-file-icon"><i :class="isPdfFile(m.file_mime) ? 'pi pi-file-pdf' : 'pi pi-file'"></i></span>
+                                    <span class="mod-file-meta"><strong>{{ m.file_name }}</strong><span>{{ prettySize(m.file_size) }}</span></span>
+                                    <i class="pi pi-download"></i>
+                                </a>
+                            </div>
+                            <p v-if="!modules.length" class="empty">No modules yet.</p>
+                        </div>
                     </TabPanel>
                     <TabPanel value="3">
                         <div class="ph"><i class="pi pi-check-square"></i><p>Tasks coming soon.</p></div>
@@ -474,22 +618,44 @@ onMounted(load);
                         <Card class="settings-card">
                             <template #content>
                                 <h3>Class Settings</h3>
-                                <div class="form">
-                                    <label>Name<InputText v-model="settings.name" /></label>
-                                    <label>Course Type<InputText v-model="settings.course_type" /></label>
-                                    <label>Description<Textarea v-model="settings.description" rows="3" autoResize /></label>
-                                    <label>Type<Select v-model="settings.type" :options="typeOptions" optionLabel="label" optionValue="value" /></label>
-                                    <div class="colors">
-                                        <span>Theme color</span>
-                                        <div class="swatches">
-                                            <button v-for="p in presets" :key="p" class="swatch" :class="{ on: settings.theme_color === p }"
-                                                :style="{ background: p }" @click="settings.theme_color = p"></button>
+                                <div class="settings-grid">
+                                    <div class="settings-col">
+                                        <label>Name<InputText v-model="settings.name" /></label>
+                                        <label>Course Type<InputText v-model="settings.course_type" /></label>
+                                        <label>Description<Textarea v-model="settings.description" rows="3" autoResize /></label>
+                                        <label>Type<Select v-model="settings.type" :options="typeOptions" optionLabel="label" optionValue="value" /></label>
+                                        <div class="colors">
+                                            <span>Theme color</span>
+                                            <div class="swatches">
+                                                <button v-for="p in presets" :key="p" class="swatch" :class="{ on: settings.theme_color === p }"
+                                                    :style="{ background: p }" @click="settings.theme_color = p"></button>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="toggle-row"><span>Join approval</span><ToggleSwitch v-model="settings.join_approval" /></div>
-                                    <div class="toggle-row"><span>Leave approval</span><ToggleSwitch v-model="settings.leave_approval" /></div>
-                                    <div class="toggle-row"><span>Allow members to post</span><ToggleSwitch v-model="settings.allow_posts" /></div>
-                                    <Button label="Save changes" :loading="saving" @click="saveSettings" />
+                                    <div class="settings-col">
+                                        <div class="cover-field">
+                                            <span>Cover image</span>
+                                            <div class="cover-preview" :style="settings.cover_image ? { backgroundImage: `url(${settings.cover_image})` } : { background: settings.theme_color }"></div>
+                                            <div class="cover-actions">
+                                                <Button :label="uploadingSettingsCover ? 'Uploading…' : 'Upload image'" icon="pi pi-upload" size="small" outlined :loading="uploadingSettingsCover" @click="settingsCoverInput.click()" />
+                                                <Button v-if="settings.cover_image" label="Remove" icon="pi pi-times" size="small" text severity="danger" @click="settings.cover_image = ''" />
+                                            </div>
+                                            <input ref="settingsCoverInput" type="file" accept="image/*" class="hidden-input" @change="onSettingsCover" />
+                                        </div>
+                                        <div class="toggle-row"><span>Join approval</span><ToggleSwitch v-model="settings.join_approval" /></div>
+                                        <div class="toggle-row"><span>Leave approval</span><ToggleSwitch v-model="settings.leave_approval" /></div>
+                                        <div class="toggle-row"><span>Allow members to post</span><ToggleSwitch v-model="settings.allow_posts" /></div>
+                                    </div>
+                                </div>
+                                <div class="settings-foot">
+                                    <Button label="Save changes" icon="pi pi-check" :loading="saving" @click="saveSettings" />
+                                </div>
+                                <div class="danger-zone">
+                                    <div class="dz-text">
+                                        <strong>Archive Group</strong>
+                                        <span>Members lose access until you restore it from your classes list.</span>
+                                    </div>
+                                    <Button label="Archive Group" icon="pi pi-inbox" severity="danger" outlined @click="archiveGroup" />
                                 </div>
                             </template>
                         </Card>
@@ -522,6 +688,30 @@ onMounted(load);
                 <template #footer>
                     <Button label="Cancel" text @click="showAward = false" />
                     <Button label="Give" :disabled="!awardForm.label" @click="giveAward" />
+                </template>
+            </Dialog>
+
+            <Dialog v-model:visible="showModule" modal header="Add New Module" :style="{ width: '520px' }">
+                <div class="form">
+                    <label>Description<Textarea v-model="moduleForm.description" rows="3" autoResize placeholder="What is this module about?" /></label>
+                    <div class="cover-field">
+                        <span>File</span>
+                        <div v-if="moduleForm.file_url" class="mod-preview">
+                            <img v-if="isImageFile(moduleForm.file_mime)" :src="moduleForm.file_url" alt="preview" />
+                            <iframe v-else-if="isPdfFile(moduleForm.file_mime)" :src="moduleForm.file_url" title="preview"></iframe>
+                            <div v-else class="mod-preview-file"><i class="pi pi-file"></i><span>{{ moduleForm.file_name }}</span></div>
+                            <div class="mod-preview-meta">{{ moduleForm.file_name }} · {{ prettySize(moduleForm.file_size) }}</div>
+                        </div>
+                        <div class="cover-actions">
+                            <Button :label="uploadingModule ? 'Uploading…' : (moduleForm.file_url ? 'Replace file' : 'Choose file')" icon="pi pi-upload" size="small" outlined :loading="uploadingModule" @click="moduleInput.click()" />
+                            <Button v-if="moduleForm.file_url" label="Remove" icon="pi pi-times" size="small" text severity="danger" @click="moduleForm.file_url = ''; moduleForm.file_name = ''; moduleForm.file_mime = ''; moduleForm.file_size = 0" />
+                        </div>
+                        <input ref="moduleInput" type="file" class="hidden-input" @change="onModuleFile" />
+                    </div>
+                </div>
+                <template #footer>
+                    <Button label="Cancel" text @click="showModule = false" />
+                    <Button label="Post Module" icon="pi pi-send" :loading="savingModule" :disabled="!moduleForm.description.trim() || uploadingModule" @click="saveModule" />
                 </template>
             </Dialog>
         </template>
@@ -593,7 +783,7 @@ onMounted(load);
 .m-role { text-transform: capitalize; }
 .ph { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 3rem; color: var(--muted-text); }
 .ph i { font-size: 2rem; }
-.settings-card { margin-top: 1rem; max-width: 460px; }
+.settings-card { margin-top: 1rem; }
 .form { display: flex; flex-direction: column; gap: 0.9rem; }
 .form label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.875rem; font-weight: 600; }
 .colors span { font-size: 0.875rem; font-weight: 600; }
@@ -602,4 +792,46 @@ onMounted(load);
 .swatch.on { border-color: var(--page-text); }
 .empty { color: var(--muted-text); }
 .err { color: #ef4444; }
+
+/* Posts sort bar */
+.feed-bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.post-sort { min-width: 160px; }
+
+/* Modules */
+.modules { display: flex; flex-direction: column; gap: 0.9rem; padding-top: 1rem; }
+.mod-head { display: flex; align-items: center; justify-content: space-between; }
+.mod-card { border: 1px solid var(--surface-border); border-radius: 12px; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.mod-card.archived { opacity: 0.6; }
+.mod-card-head { display: flex; align-items: center; gap: 0.6rem; }
+.mod-by { display: flex; flex-direction: column; flex: 1; }
+.mod-by span { font-size: 0.75rem; color: var(--muted-text); }
+.mod-tools { display: flex; gap: 0.2rem; }
+.mod-desc { margin: 0; white-space: pre-wrap; }
+.mod-file { display: flex; align-items: center; gap: 0.75rem; border: 1px solid var(--surface-border); border-radius: 10px; padding: 0.5rem 0.75rem; text-decoration: none; color: inherit; }
+.mod-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+.mod-file-icon { width: 48px; height: 48px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-100, rgba(0,0,0,0.05)); font-size: 1.4rem; }
+.mod-file-meta { display: flex; flex-direction: column; flex: 1; }
+.mod-file-meta span { font-size: 0.75rem; color: var(--muted-text); }
+
+/* Module preview */
+.mod-preview { border: 1px solid var(--surface-border); border-radius: 10px; overflow: hidden; }
+.mod-preview img { width: 100%; max-height: 240px; object-fit: contain; display: block; background: #000; }
+.mod-preview iframe { width: 100%; height: 240px; border: none; }
+.mod-preview-file { display: flex; align-items: center; gap: 0.5rem; padding: 1rem; font-size: 1.2rem; }
+.mod-preview-file span { font-size: 0.9rem; }
+.mod-preview-meta { font-size: 0.75rem; color: var(--muted-text); padding: 0.5rem 0.75rem; border-top: 1px solid var(--surface-border); }
+
+/* Settings layout */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.settings-col { display: flex; flex-direction: column; gap: 0.9rem; }
+.settings-col label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.875rem; font-weight: 600; }
+.settings-foot { display: flex; justify-content: flex-end; margin-top: 1.25rem; }
+.cover-field { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; }
+.cover-preview { width: 100%; height: 110px; border-radius: 10px; background-size: cover; background-position: center; border: 1px solid var(--surface-border); }
+.cover-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.hidden-input { display: none; }
+.danger-zone { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; padding: 1rem; border: 1px solid #ef4444; border-radius: 12px; background: rgba(239,68,68,0.05); }
+.dz-text { display: flex; flex-direction: column; }
+.dz-text span { font-size: 0.8125rem; color: var(--muted-text); font-weight: 400; }
+@media (max-width: 640px) { .settings-grid { grid-template-columns: 1fr; } }
 </style>
