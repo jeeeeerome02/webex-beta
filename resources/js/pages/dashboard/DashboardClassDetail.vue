@@ -17,6 +17,7 @@ import ToggleSwitch from 'primevue/toggleswitch';
 import Menu from 'primevue/menu';
 import Editor from 'primevue/editor';
 import Dialog from 'primevue/dialog';
+import UserAvatar from '../../components/common/UserAvatar.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -123,6 +124,30 @@ const createPost = async () => {
         posts.value.unshift(data.post);
         newPost.value = '';
     } finally { posting.value = false; }
+};
+
+let quillRef = null;
+const onEditorLoad = ({ instance }) => {
+    quillRef = instance;
+    const toolbar = instance.getModule('toolbar');
+    toolbar.addHandler('image', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = () => {
+            const file = input.files[0];
+            if (!file) return;
+            if (file.size > 25 * 1024 * 1024) { alert('Image must be 25MB or smaller.'); return; }
+            const reader = new FileReader();
+            reader.onload = () => {
+                const range = quillRef.getSelection(true);
+                quillRef.insertEmbed(range.index, 'image', reader.result);
+                quillRef.setSelection(range.index + 1);
+            };
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    });
 };
 
 const busy = ref({});
@@ -242,7 +267,7 @@ const leaveClass = async () => {
     }
 };
 
-const openProfile = (m) => router.push(`/dashboard/users/${m.id}`);
+const openProfile = (m) => router.push(`/dashboard/users/${m.profile_token || m.id}`);
 
 const addFriend = async (m) => {
     if (busy.value['f' + m.id]) return;
@@ -319,7 +344,7 @@ onMounted(load);
                             <Card v-if="canPost" class="composer">
                                 <template #content>
                                     <label class="field-label">Write a Post</label>
-                                    <Editor v-model="newPost" editorStyle="height: 120px" placeholder="Share something with the class…" />
+                                    <Editor v-model="newPost" editorStyle="height: 120px" placeholder="Share something with the class…" @load="onEditorLoad" />
                                     <div class="composer-foot">
                                         <Button label="Post" icon="pi pi-send" size="small" :loading="posting" :disabled="!newPost" @click="createPost" />
                                     </div>
@@ -331,7 +356,7 @@ onMounted(load);
                             <Card v-for="p in posts" :key="p.id" class="post" :class="{ hidden: p.is_hidden }">
                                 <template #content>
                                     <div class="post-head">
-                                        <Avatar :image="p.avatar_url || undefined" :label="p.author.charAt(0).toUpperCase()" shape="circle" />
+                                        <UserAvatar :src="p.avatar_url" :name="p.author" :size="40" />
                                         <div class="post-by"><strong>{{ p.author }}</strong><span>{{ p.created_at }}</span></div>
                                         <Tag v-if="p.is_pinned" value="pinned" icon="pi pi-thumbtack" />
                                         <Tag v-if="p.is_hidden" value="hidden" severity="secondary" />
@@ -349,7 +374,7 @@ onMounted(load);
                                     </div>
                                     <div v-if="p.comments_enabled && openComments[p.id]" class="comments">
                                         <div v-for="c in p.comments" :key="c.id" class="comment">
-                                            <Avatar :image="c.avatar_url || undefined" :label="c.author.charAt(0).toUpperCase()" shape="circle" size="small" />
+                                            <UserAvatar :src="c.avatar_url" :name="c.author" :size="32" />
                                             <div class="c-body">
                                                 <div class="c-bubble"><strong>{{ c.author }}</strong> {{ c.body }}</div>
                                                 <div class="c-meta">
@@ -357,7 +382,7 @@ onMounted(load);
                                                     <button class="c-act" @click="toggleReply(c)">Reply</button>
                                                 </div>
                                                 <div v-for="r in c.replies" :key="r.id" class="comment reply">
-                                                    <Avatar :image="r.avatar_url || undefined" :label="r.author.charAt(0).toUpperCase()" shape="circle" size="small" />
+                                                    <UserAvatar :src="r.avatar_url" :name="r.author" :size="32" />
                                                     <div class="c-body">
                                                         <div class="c-bubble"><strong>{{ r.author }}</strong> {{ r.body }}</div>
                                                         <div class="c-meta">
@@ -391,14 +416,14 @@ onMounted(load);
                             <template v-if="isOwner && pendingMembers.length">
                                 <h4>Pending approval</h4>
                                 <div v-for="m in pendingMembers" :key="m.id" class="member">
-                                    <Avatar :image="m.avatar_url || undefined" :label="m.name.charAt(0).toUpperCase()" shape="circle" />
+                                    <UserAvatar :src="m.avatar_url" :name="m.name" :size="40" />
                                     <div class="m-info"><strong>{{ m.name }}</strong><span>{{ m.email }}</span></div>
                                     <Button label="Approve" size="small" @click="approve(m)" />
                                 </div>
                             </template>
                             <h4 v-if="isOwner">Members</h4>
                             <div v-for="m in filteredMembers" :key="m.id" class="member">
-                                <Avatar :image="m.avatar_url || undefined" :label="m.name.charAt(0).toUpperCase()" shape="circle" style="cursor:pointer" @click="openProfile(m)" />
+                                <UserAvatar :src="m.avatar_url" :name="m.name" :size="40" style="cursor:pointer" @click="openProfile(m)" />
                                 <div class="m-info clickable" @click="openProfile(m)">
                                     <strong>{{ m.name }}</strong>
                                     <span class="m-role">{{ m.is_owner ? 'teacher · owner' : (m.is_co_teacher ? 'co-teacher' : m.role) }}</span>
@@ -429,7 +454,7 @@ onMounted(load);
                         <div class="chat">
                             <div class="chat-log" ref="chatLog">
                                 <div v-for="msg in messages" :key="msg.id" class="chat-msg" :class="{ mine: msg.is_mine }">
-                                    <Avatar v-if="!msg.is_mine" :image="msg.avatar_url || undefined" :label="msg.author.charAt(0).toUpperCase()" shape="circle" size="small" />
+                                    <UserAvatar v-if="!msg.is_mine" :src="msg.avatar_url" :name="msg.author" :size="32" />
                                     <div class="chat-bubble">
                                         <strong v-if="!msg.is_mine">{{ msg.author }}</strong>
                                         <p>{{ msg.body }}</p>
@@ -525,6 +550,7 @@ onMounted(load);
 .post-by { display: flex; flex-direction: column; flex: 1; }
 .post-by span { font-size: 0.75rem; color: var(--muted-text); }
 .post-body { margin: 0; white-space: pre-wrap; }
+.post-body :deep(img) { max-width: 100%; height: auto; border-radius: 8px; margin: 0.5rem 0; }
 .post-actions { display: flex; gap: 1rem; border-top: 1px solid var(--surface-border); padding-top: 0.5rem; }
 .act { background: none; border: none; cursor: pointer; color: var(--muted-text); display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
 .act.on { color: var(--accent); font-weight: 600; }

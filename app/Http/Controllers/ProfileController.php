@@ -2,47 +2,84 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Classroom;
 use App\Models\Friendship;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class ProfileController extends Controller
 {
-    public function show(int $id): JsonResponse
+    public function show(string $id): JsonResponse
     {
-        $u = User::with('awards.classroom')->findOrFail($id);
+        $u = ctype_digit($id)
+            ? User::with('awards.classroom')->findOrFail((int) $id)
+            : User::with('awards.classroom')->where('profile_token', $id)->firstOrFail();
         $auth = Auth::guard('api')->user();
+        $isSelf = $auth && $auth->id === $u->id;
 
-        if ($auth && $auth->id === $u->id) {
+        if ($isSelf) {
             $u->awards()->whereNull('seen_at')->update(['seen_at' => now()]);
         }
 
         $isFriend = $auth && Friendship::where('user_id', $auth->id)->where('friend_id', $u->id)->where('status', 'accepted')->exists();
 
+        $teaching = collect();
+        if ($u->role === 'teacher') {
+            // Classes the user owns (position: Teacher)
+            $teaching = $u->ownedClassrooms()->whereNull('archived_at')->get()->map(fn ($c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'course_type' => $c->course_type,
+                'position' => 'Teacher',
+                'is_public' => (bool) $c->show_on_profile,
+            ]);
+
+            // Classes the user co-teaches (position: Co-teacher)
+            $coTaught = $u->classrooms()
+                ->wherePivot('status', 'approved')
+                ->wherePivot('is_co_teacher', true)
+                ->whereNull('archived_at')
+                ->get()
+                ->map(fn ($c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'course_type' => $c->course_type,
+                    'position' => 'Co-teacher',
+                    'is_public' => (bool) $c->pivot->show_on_profile,
+                ]);
+
+            $teaching = $teaching->concat($coTaught);
+
+            if (! $isSelf) {
+                $teaching = $teaching->filter(fn ($t) => $t['is_public']);
+            }
+            $teaching = $teaching->values();
+        }
+
         return response()->json([
             'user' => [
                 'id' => $u->id,
+                'profile_token' => $u->profile_token,
                 'name' => $u->name,
                 'email' => $u->email,
                 'role' => $u->role,
                 'course' => $u->course,
+                'subject' => $u->subject,
+                'city_municipality' => $u->city_municipality,
+                'province' => $u->province,
+                'country' => $u->country,
                 'avatar_url' => $u->avatar(),
                 'cover_url' => $u->cover_url,
                 'friends_count' => $u->friends()->wherePivot('status', 'accepted')->count(),
-                'is_self' => $auth && $auth->id === $u->id,
+                'is_self' => $isSelf,
                 'is_friend' => (bool) $isFriend,
                 'friend_status' => $auth ? self::status($auth->id, $u->id) : 'none',
             ],
-            'teaching' => $u->role === 'teacher'
-                ? $u->ownedClassrooms()->whereNull('archived_at')->get()->map(fn ($c) => [
-                    'id' => $c->id,
-                    'name' => $c->name,
-                    'course_type' => $c->course_type,
-                ])
-                : [],
-            'awards' => $u->awards->map(fn ($a) => [
+            'teaching' => $teaching,
+            'awards' => $u->role === 'teacher' ? [] : $u->awards->map(fn ($a) => [
                 'id' => $a->id,
                 'label' => $a->label,
                 'icon' => $a->icon,
@@ -60,12 +97,62 @@ class ProfileController extends Controller
             'avatar_url' => ['nullable', 'string', 'max:30000000'],
             'cover_url' => ['nullable', 'string', 'max:30000000'],
             'name' => ['nullable', 'string', 'max:100'],
-            'course' => ['nullable', 'string', 'max:100'],
+            'subject' => ['nullable', 'string', 'max:100'],
+            'city_municipality' => ['nullable', 'string', 'max:120'],
+            'province' => ['nullable', 'string', 'max:120'],
+            'country' => ['nullable', 'string', 'max:120'],
+            'current_password' => ['nullable', 'string'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
+        if (! empty($data['password'])) {
+            if (empty($data['current_password']) || ! Hash::check($data['current_password'], $user->password)) {
+                return response()->json(['message' => 'Current password is incorrect.'], 422);
+            }
+            $user->password = $data['password'];
+        }
+
+        unset($data['password'], $data['current_password']);
         $user->fill(array_filter($data, fn ($v) => $v !== null))->save();
 
-        return response()->json(['message' => 'Profile updated.']);
+        return response()->json([
+            'message' => 'Profile updated.',
+            'user' => [
+                'name' => $user->name,
+                'subject' => $user->subject,
+                'city_municipality' => $user->city_municipality,
+                'province' => $user->province,
+                'country' => $user->country,
+            ],
+        ]);
+    }
+
+    public function classVisibility(Request $request): JsonResponse
+    {
+        $user = Auth::guard('api')->user();
+        $data = $request->validate([
+            'class_id' => ['required', 'integer'],
+            'public' => ['required', 'boolean'],
+        ]);
+
+        $classroom = Classroom::findOrFail($data['class_id']);
+
+        if ($classroom->teacher_id === $user->id) {
+            $classroom->update(['show_on_profile' => $data['public']]);
+
+            return response()->json(['message' => 'Visibility updated.', 'is_public' => $data['public']]);
+        }
+
+        $isCoTeacher = $classroom->members()
+            ->where('user_id', $user->id)
+            ->wherePivot('is_co_teacher', true)
+            ->exists();
+
+        abort_unless($isCoTeacher, 403);
+
+        $classroom->members()->updateExistingPivot($user->id, ['show_on_profile' => $data['public']]);
+
+        return response()->json(['message' => 'Visibility updated.', 'is_public' => $data['public']]);
     }
 
     public function addFriend(int $id): JsonResponse
@@ -152,6 +239,7 @@ class ProfileController extends Controller
             ->limit(20)->get()
             ->map(fn ($u) => [
                 'id' => $u->id,
+                'profile_token' => $u->profile_token,
                 'name' => $u->name,
                 'email' => $u->email,
                 'role' => $u->role,

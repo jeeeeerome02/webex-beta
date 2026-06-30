@@ -6,6 +6,7 @@ import InputText from 'primevue/inputtext';
 import Avatar from 'primevue/avatar';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
+import UserAvatar from '../../components/common/UserAvatar.vue';
 
 const router = useRouter();
 const q = ref('');
@@ -25,7 +26,7 @@ watch(q, (val) => {
     }, 300);
 });
 
-const openProfile = (u) => router.push(`/dashboard/users/${u.id}`);
+const openProfile = (u) => router.push(`/dashboard/users/${u.profile_token || u.id}`);
 const busy = ref({});
 const run = async (u, path, status) => {
     if (busy.value[u.id]) return;
@@ -49,7 +50,7 @@ const declineFriend = (u) => run(u, '/decline', 'none');
         </span>
         <p v-if="searching" class="muted">Searching…</p>
         <div v-for="u in results" :key="u.id" class="row">
-            <Avatar :image="u.avatar_url || undefined" :label="u.name.charAt(0).toUpperCase()" shape="circle" style="cursor:pointer" @click="openProfile(u)" />
+            <UserAvatar :src="u.avatar_url" :name="u.name" :size="40" style="cursor:pointer" @click="openProfile(u)" />
             <div class="info" @click="openProfile(u)"><strong>{{ u.name }}</strong><span>{{ u.role }} · {{ u.email }}</span></div>
             <Tag v-if="u.friend_status === 'friends'" value="Friends" icon="pi pi-check" severity="success" />
             <Button v-else-if="u.friend_status === 'requested'" label="Cancel" icon="pi pi-times" size="small" outlined :loading="busy[u.id]" @click="cancelFriend(u)" />

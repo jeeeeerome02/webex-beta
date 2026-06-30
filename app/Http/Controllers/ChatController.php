@@ -31,6 +31,7 @@ class ChatController extends Controller
                     'avatar_url' => $other->avatar(),
                     'last' => $last?->body,
                     'time' => $last ? $last->created_at->diffForHumans() : '',
+                    'unread' => $c->unreadFor($user->id),
                 ];
             })->values();
 
@@ -49,6 +50,8 @@ class ChatController extends Controller
                 'user_two_id' => max($user->id, $userId),
             ]);
         }
+
+        $c->markReadFor($user->id);
 
         return response()->json([
             'conversation' => [

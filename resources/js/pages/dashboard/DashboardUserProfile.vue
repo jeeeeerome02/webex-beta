@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import Button from 'primevue/button';
-import Tag from 'primevue/tag';
 
 const route = useRoute();
 const router = useRouter();
@@ -12,10 +11,15 @@ const awards = ref([]);
 const teaching = ref([]);
 const loading = ref(true);
 const busy = ref(false);
+const showUnfriend = ref(false);
 
 const cover = computed(() => user.value?.cover_url || '');
 const avatar = computed(() => user.value?.avatar_url || `https://api.dicebear.com/9.x/adventurer/svg?seed=${user.value?.name || 'User'}`);
 const isTeacher = computed(() => user.value?.role === 'teacher');
+const locationText = computed(() => {
+    const parts = [user.value?.city_municipality, user.value?.province, user.value?.country].filter(Boolean);
+    return parts.join(', ');
+});
 
 const run = async (path, status) => {
     if (busy.value) return;
@@ -29,7 +33,7 @@ const addFriend = () => run('', null);
 const cancelFriend = () => run('/cancel', 'none');
 const acceptFriend = () => run('/accept', null);
 const declineFriend = () => run('/decline', 'none');
-const unfriend = () => { if (confirm(`Unfriend ${user.value.name}?`)) run('/unfriend', 'none'); };
+const unfriend = () => { showUnfriend.value = false; if (confirm(`Unfriend ${user.value.name}?`)) run('/unfriend', 'none'); };
 
 const message = async () => {
     const { data } = await axios.get(`/api/conversations/with/${user.value.id}`);
@@ -58,15 +62,27 @@ onMounted(async () => {
 
         <div class="head">
             <h2>{{ user.name }}</h2>
-            <p class="role">{{ user.role }} · {{ user.course || 'No course' }}</p>
+            <p class="role">{{ user.role }}</p>
+            <p v-if="isTeacher && user.subject" class="detail"><i class="pi pi-bookmark"></i> Teaching {{ user.subject }}</p>
+            <p v-else-if="!isTeacher && user.course" class="detail"><i class="pi pi-graduation-cap"></i> Your course is {{ user.course }}</p>
+            <p v-if="locationText" class="detail"><i class="pi pi-map-marker"></i> {{ locationText }}</p>
             <div class="stats">
                 <span><strong>{{ user.friends_count }}</strong> friends</span>
                 <span v-if="!isTeacher"><strong>{{ awards.length }}</strong> awards</span>
+                <span v-else><strong>{{ teaching.length }}</strong> classes</span>
             </div>
             <div v-if="!user.is_self" class="friend-bar">
                 <template v-if="user.friend_status === 'friends'">
-                    <Tag value="Friends" icon="pi pi-check" severity="success" />
-                    <Button label="Unfriend" icon="pi pi-user-minus" size="small" severity="danger" outlined :loading="busy" @click="unfriend" />
+                    <div class="friend-dd">
+                        <button class="friend-badge" @click="showUnfriend = !showUnfriend">
+                            <i class="pi pi-check"></i> Friends <i class="pi pi-angle-down"></i>
+                        </button>
+                        <div v-if="showUnfriend" class="friend-menu">
+                            <button class="friend-menu-item" @click="unfriend">
+                                <i class="pi pi-user-minus"></i> Unfriend
+                            </button>
+                        </div>
+                    </div>
                 </template>
                 <Button v-else-if="user.friend_status === 'requested'" label="Cancel request" icon="pi pi-times" size="small" outlined :loading="busy" @click="cancelFriend" />
                 <template v-else-if="user.friend_status === 'incoming'">
@@ -84,7 +100,7 @@ onMounted(async () => {
                 <div v-for="c in teaching" :key="c.id" class="award">
                     <i class="pi pi-book award-icon"></i>
                     <strong>{{ c.name }}</strong>
-                    <span>{{ c.course_type || 'Course' }}</span>
+                    <span>{{ c.position }}{{ c.course_type ? ' · ' + c.course_type : '' }}</span>
                 </div>
                 <p v-if="!teaching.length" class="empty">No active classes.</p>
             </div>
@@ -112,9 +128,16 @@ onMounted(async () => {
 .head { margin: 3.5rem 0 0 1.5rem; }
 .head h2 { margin: 0; }
 .role { margin: 0.25rem 0; color: var(--muted-text); text-transform: capitalize; }
+.detail { margin: 0.2rem 0; color: var(--muted-text); font-size: 0.9rem; display: flex; align-items: center; gap: 0.45rem; }
+.detail i { color: var(--accent, #4f46e5); }
 .stats { display: flex; gap: 1.5rem; margin-top: 0.5rem; }
 .stats strong { color: var(--page-text); }
 .friend-bar { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; }
+.friend-dd { position: relative; }
+.friend-badge { display: inline-flex; align-items: center; gap: 0.35rem; background: #10b981; color: #fff; border: none; border-radius: 8px; padding: 0.4rem 0.7rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.friend-menu { position: absolute; top: calc(100% + 4px); left: 0; background: var(--content-bg); border: 1px solid var(--surface-border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); z-index: 20; overflow: hidden; }
+.friend-menu-item { display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.6rem 1rem; background: transparent; border: none; cursor: pointer; color: #ef4444; white-space: nowrap; font-size: 0.85rem; }
+.friend-menu-item:hover { background: var(--surface-border); }
 .sec { margin: 1.5rem 0 0.75rem; }
 .awards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
 .award { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; text-align: center; background: var(--content-bg); border: 1px solid var(--surface-border); border-radius: 12px; padding: 1rem; }

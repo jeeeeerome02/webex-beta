@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Classroom;
 use App\Models\ClassroomPost;
 use App\Models\ClassroomPostComment;
+use App\Models\UserNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,6 +22,51 @@ class ClassroomPostController extends Controller
         abort_unless($isOwner || $isMember, 403, 'No access to this class.');
 
         return [$user, $classroom, $isOwner];
+    }
+
+    private function notifyClass(Classroom $classroom, $actor, string $type, string $icon, string $text, string $token): void
+    {
+        $recipients = $classroom->members()->wherePivot('status', 'approved')->pluck('users.id')
+            ->push($classroom->teacher_id)
+            ->unique()
+            ->reject(fn ($id) => $id === $actor->id)
+            ->values();
+
+        $now = now();
+        $rows = $recipients->map(fn ($id) => [
+            'user_id' => $id,
+            'actor_id' => $actor->id,
+            'type' => $type,
+            'icon' => $icon,
+            'text' => $text,
+            'link' => '/dashboard/classes/'.$token,
+            'class_name' => $classroom->name,
+            'read' => false,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->all();
+
+        if ($rows) {
+            UserNotification::insert($rows);
+        }
+    }
+
+    private function notifyUser(int $userId, $actor, string $type, string $icon, string $text, string $link, ?string $class): void
+    {
+        if ($userId === $actor->id) {
+            return;
+        }
+
+        UserNotification::create([
+            'user_id' => $userId,
+            'actor_id' => $actor->id,
+            'type' => $type,
+            'icon' => $icon,
+            'text' => $text,
+            'link' => $link,
+            'class_name' => $class,
+            'read' => false,
+        ]);
     }
 
     public function index(string $token): JsonResponse
@@ -54,6 +100,8 @@ class ClassroomPostController extends Controller
         $post = $classroom->posts()->create(['user_id' => $user->id, 'body' => $clean]);
         $post->loadCount('likes')->load(['author', 'comments.author', 'likes']);
 
+        $this->notifyClass($classroom, $user, 'post', 'pi pi-megaphone', $user->name.' posted in '.$classroom->name, $token);
+
         return response()->json(['post' => $this->serialize($post, $user->id, $isOwner)], 201);
     }
 
@@ -69,6 +117,7 @@ class ClassroomPostController extends Controller
         } else {
             $post->likes()->create(['user_id' => $user->id]);
             $liked = true;
+            $this->notifyUser($post->user_id, $user, 'like', 'pi pi-heart-fill', $user->name.' liked your post', '/dashboard/classes/'.$token, $post->classroom?->name);
         }
 
         return response()->json(['liked' => $liked, 'count' => $post->likes()->count()]);
@@ -93,6 +142,15 @@ class ClassroomPostController extends Controller
             'parent_id' => $data['parent_id'] ?? null,
         ]);
         $comment->load(['author', 'likes', 'replies']);
+
+        if ($comment->parent_id) {
+            $parent = ClassroomPostComment::find($comment->parent_id);
+            if ($parent) {
+                $this->notifyUser($parent->user_id, $user, 'reply', 'pi pi-reply', $user->name.' replied to your comment', '/dashboard/classes/'.$token, $post->classroom?->name);
+            }
+        } else {
+            $this->notifyUser($post->user_id, $user, 'comment', 'pi pi-comment', $user->name.' commented on your post', '/dashboard/classes/'.$token, $post->classroom?->name);
+        }
 
         return response()->json(['comment' => $this->serializeComment($comment, $user->id)]);
     }
@@ -136,6 +194,17 @@ class ClassroomPostController extends Controller
         return response()->json(['is_hidden' => $post->is_hidden]);
     }
 
+    public function destroy(string $token, int $postId): JsonResponse
+    {
+        [$user, , $isOwner] = $this->authorize($token);
+        $post = ClassroomPost::findOrFail($postId);
+        abort_unless($isOwner || $post->user_id === $user->id, 403, 'You cannot delete this post.');
+
+        $post->delete();
+
+        return response()->json(['message' => 'Post deleted.']);
+    }
+
     public function pin(string $token, int $postId): JsonResponse
     {
         [$user, $classroom, $isOwner] = $this->authorize($token);
@@ -154,6 +223,7 @@ class ClassroomPostController extends Controller
         return [
             'id' => $p->id,
             'body' => $p->body,
+            'kind' => $p->kind ?? 'post',
             'author' => $p->author->name,
             'author_id' => $p->user_id,
             'avatar_url' => $p->author->avatar(),

@@ -24,12 +24,15 @@ class Classroom extends Model
         'join_approval',
         'leave_approval',
         'allow_posts',
+        'show_on_profile',
+        'cover_image',
     ];
 
     protected $casts = [
         'join_approval' => 'boolean',
         'leave_approval' => 'boolean',
         'allow_posts' => 'boolean',
+        'show_on_profile' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -49,13 +52,18 @@ class Classroom extends Model
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'classroom_members')
-            ->withPivot('status', 'is_co_teacher')
+            ->withPivot('status', 'is_co_teacher', 'show_on_profile')
             ->withTimestamps();
     }
 
     public function posts(): HasMany
     {
         return $this->hasMany(ClassroomPost::class);
+    }
+
+    public function modules(): HasMany
+    {
+        return $this->hasMany(ClassroomModule::class);
     }
 
     public function messages(): HasMany

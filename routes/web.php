@@ -4,8 +4,10 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClassroomChatController;
 use App\Http\Controllers\ClassroomController;
+use App\Http\Controllers\ClassroomModuleController;
 use App\Http\Controllers\ClassroomPostController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\UploadController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('jwt.cookie')->group(function () {
@@ -20,6 +22,7 @@ Route::middleware('jwt.cookie')->group(function () {
     Route::post('/api/notifications/clear', [ClassroomController::class, 'clearNotifications']);
     Route::post('/api/notifications/read', [ClassroomController::class, 'readNotification']);
     Route::get('/api/users', [ProfileController::class, 'search']);
+    Route::post('/api/upload', [UploadController::class, 'store']);
     Route::get('/api/classrooms/invite/{token}', [ClassroomController::class, 'showByToken']);
     Route::post('/api/classrooms/invite/{token}/join', [ClassroomController::class, 'join']);
     Route::get('/api/classrooms/{token}', [ClassroomController::class, 'show']);
@@ -32,6 +35,7 @@ Route::middleware('jwt.cookie')->group(function () {
     Route::post('/api/classrooms/{token}/leave', [ClassroomController::class, 'leave']);
     Route::get('/api/users/{id}', [ProfileController::class, 'show']);
     Route::put('/api/profile', [ProfileController::class, 'update']);
+    Route::post('/api/profile/class-visibility', [ProfileController::class, 'classVisibility']);
     Route::post('/api/users/{id}/friend', [ProfileController::class, 'addFriend']);
     Route::post('/api/users/{id}/friend/accept', [ProfileController::class, 'accept']);
     Route::post('/api/users/{id}/friend/decline', [ProfileController::class, 'decline']);
@@ -45,7 +49,13 @@ Route::middleware('jwt.cookie')->group(function () {
     Route::post('/api/classrooms/{token}/posts/{postId}/comments/{commentId}/like', [ClassroomPostController::class, 'likeComment']);
     Route::post('/api/classrooms/{token}/posts/{postId}/toggle-comments', [ClassroomPostController::class, 'toggleComments']);
     Route::post('/api/classrooms/{token}/posts/{postId}/hide', [ClassroomPostController::class, 'hide']);
+    Route::delete('/api/classrooms/{token}/posts/{postId}', [ClassroomPostController::class, 'destroy']);
     Route::post('/api/classrooms/{token}/posts/{postId}/pin', [ClassroomPostController::class, 'pin']);
+
+    Route::get('/api/classrooms/{token}/modules', [ClassroomModuleController::class, 'index']);
+    Route::post('/api/classrooms/{token}/modules', [ClassroomModuleController::class, 'store']);
+    Route::post('/api/classrooms/{token}/modules/{id}/archive', [ClassroomModuleController::class, 'archive']);
+    Route::delete('/api/classrooms/{token}/modules/{id}', [ClassroomModuleController::class, 'destroy']);
 
     Route::get('/api/classrooms/{token}/messages', [ClassroomChatController::class, 'index']);
     Route::post('/api/classrooms/{token}/messages', [ClassroomChatController::class, 'store']);

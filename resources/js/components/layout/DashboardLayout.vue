@@ -8,6 +8,7 @@ import Drawer from 'primevue/drawer';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
 import AppLogo from './AppLogo.vue';
+import UserAvatar from '../common/UserAvatar.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -23,11 +24,11 @@ const menu = [
     { label: 'Classes', icon: 'pi pi-book', to: '/dashboard/classes', key: 'classes' },
     { label: 'Search', icon: 'pi pi-search', to: '/dashboard/search' },
     { label: 'Notifications', icon: 'pi pi-bell', to: '/dashboard/notifications', key: 'notifications' },
-    { label: 'Chat', icon: 'pi pi-comments', to: '/dashboard/chat' },
+    { label: 'Chat', icon: 'pi pi-comments', to: '/dashboard/chat', key: 'chat' },
     { label: 'Profile', icon: 'pi pi-user', to: '/dashboard/profile' },
 ];
 
-const notifications = ref({ classes: 0, notifications: 0 });
+const notifications = ref({ classes: 0, notifications: 0, chat: 0 });
 let knownFriends = null;
 
 const loadNotifications = async () => {
@@ -43,7 +44,7 @@ const loadNotifications = async () => {
         }
         knownFriends = accepted;
     } catch {
-        notifications.value = { classes: 0, notifications: 0 };
+        notifications.value = { classes: 0, notifications: 0, chat: 0 };
     }
 };
 
@@ -179,7 +180,7 @@ onUnmounted(() => {
                 <div class="dash-topbar-right">
                     <span class="dash-user">
                         <span class="dash-user-name">{{ user?.name || 'Guest' }}</span>
-                        <Avatar :image="user?.avatar_url || undefined" :label="initials" shape="circle" />
+                        <UserAvatar :src="user?.avatar_url" :name="user?.name" :size="38" />
                     </span>
                 </div>
             </header>

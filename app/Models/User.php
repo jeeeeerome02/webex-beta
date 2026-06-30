@@ -25,6 +25,8 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'role',
         'course',
+        'subject',
+        'profile_token',
         'avatar_url',
         'cover_url',
         'notifications_read_at',
@@ -35,6 +37,7 @@ class User extends Authenticatable implements JWTSubject
         'province',
         'region',
         'postal_code',
+        'country',
     ];
 
     /**
@@ -94,13 +97,18 @@ class User extends Authenticatable implements JWTSubject
     public function classrooms(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
         return $this->belongsToMany(Classroom::class, 'classroom_members')
-            ->withPivot('status')
+            ->withPivot('status', 'is_co_teacher', 'show_on_profile')
             ->withTimestamps();
     }
 
     public function awards(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Award::class, 'user_id');
+    }
+
+    public function userNotifications(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(UserNotification::class, 'user_id');
     }
 
     public function friends(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
@@ -113,5 +121,14 @@ class User extends Authenticatable implements JWTSubject
     public function avatar(): string
     {
         return $this->avatar_url ?: 'https://api.dicebear.com/9.x/adventurer/svg?seed='.urlencode($this->name);
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (User $user) {
+            if (empty($user->profile_token)) {
+                $user->profile_token = \Illuminate\Support\Str::random(20);
+            }
+        });
     }
 }

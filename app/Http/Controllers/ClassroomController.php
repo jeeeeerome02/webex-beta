@@ -82,6 +82,7 @@ class ClassroomController extends Controller
             ->get()
             ->map(fn ($m) => [
                 'id' => $m->id,
+                'profile_token' => $m->profile_token,
                 'name' => $m->name,
                 'email' => $m->email,
                 'role' => $m->role,
@@ -95,6 +96,7 @@ class ClassroomController extends Controller
         $teacher = $classroom->teacher;
         $members->prepend([
             'id' => $teacher->id,
+            'profile_token' => $teacher->profile_token,
             'name' => $teacher->name,
             'email' => $teacher->email,
             'role' => 'teacher',
@@ -132,6 +134,7 @@ class ClassroomController extends Controller
             'join_approval' => ['sometimes', 'boolean'],
             'leave_approval' => ['sometimes', 'boolean'],
             'allow_posts' => ['sometimes', 'boolean'],
+            'cover_image' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
 
         $classroom->update($validated);
@@ -182,6 +185,10 @@ class ClassroomController extends Controller
     {
         $classroom = Classroom::where('invite_token', $token)->firstOrFail();
         $user = Auth::guard('api')->user();
+
+        if (! $user) {
+            return response()->json(['message' => 'Please sign in to join.'], 401);
+        }
 
         if ($classroom->teacher_id === $user->id) {
             return response()->json(['message' => 'You own this class.', 'status' => 'owner']);
@@ -262,6 +269,7 @@ class ClassroomController extends Controller
         $icon = $data['icon'] ?? 'pi pi-star';
         $classroom->posts()->create([
             'user_id' => $user->id,
+            'kind' => 'award',
             'body' => '<p><i class="'.e($icon).'"></i> <strong>'.e($recipient?->name).'</strong> received the <strong>'.e($data['label']).'</strong> award!</p>',
         ]);
 
@@ -366,7 +374,7 @@ class ClassroomController extends Controller
                 'icon' => 'pi pi-check-circle',
                 'text' => $f->name.' is now your friend',
                 'class' => null,
-                'to' => '/dashboard/users/'.$f->id,
+                'to' => '/dashboard/users/'.$f->profile_token,
                 'date' => $f->pivot->created_at->diffForHumans(),
                 'unread' => ! $readAt || $f->pivot->created_at > $readAt,
             ]);
@@ -378,7 +386,7 @@ class ClassroomController extends Controller
                 'icon' => 'pi pi-user-plus',
                 'text' => ($r->requester?->name ?? 'Someone').' sent you a friend request',
                 'class' => null,
-                'to' => '/dashboard/users/'.$r->user_id,
+                'to' => '/dashboard/users/'.($r->requester?->profile_token ?? $r->user_id),
                 'user_id' => $r->user_id,
                 'date' => $r->created_at->diffForHumans(),
                 'unread' => true,
@@ -397,7 +405,19 @@ class ClassroomController extends Controller
                 'unread' => true,
             ]);
 
-        $items = $requests->concat($awards)->concat($friends)->concat($groups)->values();
+        $activity = $user->userNotifications()->latest()->take(30)->get()
+            ->map(fn ($n) => [
+                'id' => 'n'.$n->id,
+                'type' => $n->type,
+                'icon' => $n->icon,
+                'text' => $n->text,
+                'class' => $n->class_name,
+                'to' => $n->link,
+                'date' => $n->created_at->diffForHumans(),
+                'unread' => ! $n->read,
+            ]);
+
+        $items = $requests->concat($activity)->concat($awards)->concat($friends)->concat($groups)->values();
 
         $read = $user->read_notifications ?? [];
         $items = $items->map(function ($n) use ($read) {
@@ -407,9 +427,15 @@ class ClassroomController extends Controller
         });
         $unread = $items->where('unread', true)->count();
 
+        $chatUnread = \App\Models\Conversation::where('user_one_id', $user->id)
+            ->orWhere('user_two_id', $user->id)
+            ->get()
+            ->sum(fn ($c) => $c->unreadFor($user->id));
+
         return response()->json([
             'classes' => (int) $pending,
             'notifications' => (int) $unread,
+            'chat' => (int) $chatUnread,
             'items' => $items->values(),
         ]);
     }
@@ -418,6 +444,13 @@ class ClassroomController extends Controller
     {
         $user = Auth::guard('api')->user();
         $id = (string) $request->input('id');
+
+        if (str_starts_with($id, 'n')) {
+            $user->userNotifications()->where('id', (int) substr($id, 1))->update(['read' => true]);
+
+            return response()->json(['message' => 'ok']);
+        }
+
         $read = $user->read_notifications ?? [];
         if (! in_array($id, $read, true)) {
             $read[] = $id;
@@ -431,6 +464,7 @@ class ClassroomController extends Controller
     {
         $user = Auth::guard('api')->user();
         $user->update(['notifications_read_at' => now()]);
+        $user->userNotifications()->where('read', false)->update(['read' => true]);
 
         return response()->json(['message' => 'Notifications cleared.']);
     }
@@ -443,6 +477,7 @@ class ClassroomController extends Controller
             'description' => $c->description,
             'course_type' => $c->course_type,
             'theme_color' => $c->theme_color,
+            'cover_image' => $c->cover_image,
             'type' => $c->type,
             'invite_token' => $c->invite_token,
             'join_approval' => (bool) $c->join_approval,
