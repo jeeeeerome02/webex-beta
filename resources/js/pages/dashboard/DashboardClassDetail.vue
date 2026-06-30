@@ -559,7 +559,7 @@ const markCorrect = (q, i) => {
     if (q.type === 'radio') q.options.forEach((o, idx) => { o.correct = idx === i; });
     else q.options[i].correct = !q.options[i].correct;
 };
-const ensureOptions = (q) => { if (hasOptions(q) && !q.options.length) q.options = [{ text: '', correct: false }, { text: '', correct: false }]; };
+const ensureOptions = (q) => { if (hasOptions(q) && !q.options.length) q.options = [{ text: '', correct: false }, { text: '', correct: false }]; if ((q.type === 'essay' || q.type === 'code') && (!q.points || q.points <= 1)) q.points = 10; };
 
 const saveTask = async () => {
     if (!taskForm.value.name.trim()) { taskStep.value = 1; taskTab.value = 'basic'; return; }
@@ -1014,7 +1014,7 @@ onMounted(load);
                             <Select v-model="q.type" :options="questionTypeOptions" optionLabel="label" optionValue="value" @change="ensureOptions(q)" />
                             <div class="q-points">
                                 <label class="q-extra-label">Points (weight for AI scoring)</label>
-                                <InputNumber v-model="q.points" :min="0" :max="1000" :step="1" showButtons placeholder="1" />
+                                <InputNumber v-model="q.points" :min="0" :max="1000" :step="1" showButtons :placeholder="q.type === 'essay' || q.type === 'code' ? '10' : '1'" />
                             </div>
                             <div v-if="hasOptions(q)" class="q-options">
                                 <div v-for="(o, oi) in q.options" :key="oi" class="q-option">

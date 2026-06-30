@@ -9,11 +9,14 @@ import RadioButton from 'primevue/radiobutton';
 import Checkbox from 'primevue/checkbox';
 import ProgressBar from 'primevue/progressbar';
 import Tag from 'primevue/tag';
+import Toast from 'primevue/toast';
+import { useToast } from 'primevue/usetoast';
 
 const route = useRoute();
 const router = useRouter();
 const token = route.params.id;
 const taskId = route.params.taskId;
+const toast = useToast();
 
 const loading = ref(true);
 const error = ref('');
@@ -74,6 +77,14 @@ const answeredCount = computed(() => orderedQuestions.value.filter(({ qi, q }) =
 
 const pushLog = (type, detail) => { logs.value.push({ type, detail, at: new Date().toISOString() }); };
 
+let lastWarn = 0;
+const warnProctor = (summary, detail) => {
+    const now = Date.now();
+    if (now - lastWarn < 1500) return;
+    lastWarn = now;
+    toast.add({ severity: 'warn', summary, detail, life: 4000 });
+};
+
 const autosave = () => {
     if (!task.value || submitted.value) return;
     clearTimeout(saveTimer);
@@ -85,22 +96,27 @@ const autosave = () => {
 };
 
 const onFsChange = () => {
-    if (!document.fullscreenElement && task.value?.advanced?.fullscreen && task.value?.advanced?.fs_exit && !submitted.value) {
-        pushLog('exit_fullscreen', 'Exited fullscreen');
-        autosave();
-    }
+    if (document.fullscreenElement || !task.value?.advanced?.fullscreen || submitted.value) return;
+    if (task.value?.advanced?.fs_exit) pushLog('exit_fullscreen', 'Exited fullscreen');
+    warnProctor('You left fullscreen', 'Please stay in fullscreen during the exam. This action was recorded.');
+    enterFullscreen();
+    autosave();
 };
 const onKeydown = (e) => {
     if (!task.value?.advanced?.fs_shortcuts || submitted.value) return;
     if (e.ctrlKey || e.metaKey || e.altKey) {
         const combo = `${e.ctrlKey ? 'Ctrl+' : ''}${e.metaKey ? 'Meta+' : ''}${e.altKey ? 'Alt+' : ''}${e.key}`;
         pushLog('shortcut', combo);
+        warnProctor('Shortcut not allowed', `“${combo}” is blocked during the exam. This action was recorded.`);
+        e.preventDefault();
+        if (task.value?.advanced?.fullscreen && !document.fullscreenElement) enterFullscreen();
         autosave();
     }
 };
 const onVisibility = () => {
     if (document.hidden && task.value && !submitted.value) {
         pushLog('tab_switch', 'Left the exam tab');
+        warnProctor('You left the exam tab', 'Switching tabs or apps during the exam is recorded.');
         autosave();
     }
 };
@@ -240,6 +256,7 @@ onBeforeUnmount(() => { detachProctor(); clearTimeout(saveTimer); });
 
 <template>
     <div class="exam-shell">
+        <Toast position="top-right" />
         <header class="exam-appbar">
             <div class="exam-appbar-in">
                 <button class="exam-back" @click="leave"><i class="pi pi-arrow-left"></i></button>
